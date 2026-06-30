@@ -1,0 +1,72 @@
+import argparse
+
+
+def exp_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser()
+
+    # experiment
+    parser.add_argument("--run_name", type=str, default="default_run")
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--epochs", type=int, default=20)
+    parser.add_argument("--batch_size", type=int, default=64)
+    parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--weight_decay", type=float, default=0.0)
+    parser.add_argument("--num_workers", type=int, default=0)
+
+    # data
+    parser.add_argument("--data_path", type=str, required=True)
+    parser.add_argument("--target_col", type=str, required=True)
+    parser.add_argument("--feature_cols", nargs="*", default=None)
+    parser.add_argument("--time_col", type=str, default=None)
+    parser.add_argument("--seq_len", type=int, default=24)
+    parser.add_argument("--pred_len", type=int, default=1)
+    parser.add_argument("--split_type", type=str, default="year_half", choices=["year_half", "year", "ratio"])
+    parser.add_argument("--n_fold", type=int, default=5)
+    parser.add_argument("--fold_numb", type=int, default=0)
+    parser.add_argument("--train_ratio", type=float, default=0.7)
+    parser.add_argument("--val_ratio", type=float, default=0.15)
+    parser.add_argument("--shuffle_train", action="store_true")
+
+    # model comparison
+    parser.add_argument("--models", nargs="+", default=["lstm", "timesnet"])
+    parser.add_argument("--hidden_size", type=int, default=64)
+
+    # 표준 모델 공통 기본값
+    parser.add_argument("--task_name", type=str, default="long_term_forecast")
+    parser.add_argument("--label_len", type=int, default=0)
+    parser.add_argument("--d_model", type=int, default=128)
+    parser.add_argument("--dropout", type=float, default=0.1)
+    parser.add_argument("--num_layers", type=int, default=2)
+    parser.add_argument("--e_layers", type=int, default=2)
+    parser.add_argument("--d_layers", type=int, default=1)
+    parser.add_argument("--d_ff", type=int, default=256)
+    parser.add_argument("--factor", type=int, default=3)
+    parser.add_argument("--n_heads", type=int, default=4)
+    parser.add_argument("--activation", type=str, default="gelu")
+    parser.add_argument("--embed", type=str, default="fixed")
+    parser.add_argument("--freq", type=str, default="h")
+    parser.add_argument("--patch_len", type=int, default=16)
+    parser.add_argument("--stride", type=int, default=8)
+    parser.add_argument("--top_k", type=int, default=5)
+    parser.add_argument("--num_kernels", type=int, default=6)
+    parser.add_argument("--num_class", type=int, default=1)
+
+    return parser
+
+
+def config_postprocess(config):
+    if not 0 < config.train_ratio < 1:
+        raise ValueError("train_ratio must be between 0 and 1.")
+    if not 0 <= config.val_ratio < 1:
+        raise ValueError("val_ratio must be between 0 and 1.")
+    if config.train_ratio + config.val_ratio >= 1:
+        raise ValueError("train_ratio + val_ratio must be < 1.")
+    if config.label_len <= 0:
+        config.label_len = max((config.seq_len + config.pred_len) // 4, 1)
+    if config.n_fold < 3:
+        raise ValueError("n_fold must be >= 3.")
+    if not 0 <= config.fold_numb < config.n_fold:
+        raise ValueError("fold_numb must be within [0, n_fold).")
+    if config.split_type in {"year", "year_half"} and not config.time_col:
+        raise ValueError("time-based k-fold requires --time_col.")
+    return config
