@@ -9,6 +9,72 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 
 
+def _read_table(path, columns=None):
+    if str(path).endswith(".parquet"):
+        return pd.read_parquet(path, columns=columns)
+    return pd.read_csv(path)
+
+
+def _valid_starts(valid, L):
+    """int64 positions i where valid[i:i+L] is entirely True."""
+    n = len(valid) - L + 1
+    if n <= 0:
+        return np.empty(0, dtype=np.int64)
+    invalid = (~np.asarray(valid)).astype(np.int64)
+    csum = np.concatenate([[0], np.cumsum(invalid)])
+    cnt = csum[L:L + n] - csum[:n]
+    return np.nonzero(cnt == 0)[0].astype(np.int64)
+
+
+def _term_labels(index, split_type):
+    year = index.year.to_numpy().astype("U4")
+    if split_type == "year":
+        return year
+    if split_type == "year_half":
+        half = np.where(index.month.to_numpy() <= 6, "H1", "H2")
+        return np.char.add(np.char.add(year, "-"), half)
+    raise ValueError(f"Unsupported split_type: {split_type}")
+
+
+def _prepare_series(df, time_col, target_col, role, transform, role_col="role"):
+    sub = df
+    if role is not None and role_col in df.columns:
+        sub = df[df[role_col] == role]
+    sub = sub[[time_col, target_col]].copy()
+    sub[time_col] = pd.to_datetime(sub[time_col])
+    sub = (sub.dropna(subset=[time_col])
+              .drop_duplicates(time_col, keep="last")
+              .sort_values(time_col))
+    s = sub.set_index(time_col)[target_col].astype("float64")
+    if transform == "log10":
+        with np.errstate(divide="ignore", invalid="ignore"):
+            s = np.log10(s.where(s > 0))
+    elif transform != "none":
+        raise ValueError(f"unknown transform: {transform}")
+    return s
+
+
+def _grid_and_starts(series, terms, cadence_min, seq_len, pred_len, split_type):
+    L = seq_len + pred_len
+    step = pd.Timedelta(minutes=cadence_min)
+    labels = _term_labels(series.index, split_type)
+    all_vals, all_starts, offset = [], [], 0
+    for term in sorted(terms):
+        sub = series[labels == term]
+        if sub.empty:
+            continue
+        grid = pd.date_range(sub.index.min(), sub.index.max(), freq=step)
+        g = sub.reindex(grid).to_numpy(dtype="float64")
+        starts = _valid_starts(~np.isnan(g), L)
+        all_vals.append(g)
+        if len(starts):
+            all_starts.append(starts + offset)
+        offset += len(g)
+    values = np.concatenate(all_vals) if all_vals else np.empty(0, dtype="float64")
+    starts = np.concatenate(all_starts) if all_starts else np.empty(0, dtype=np.int64)
+    return values, starts
+
+
 class SequenceDataset(Dataset):
     def __init__(self, x: np.ndarray, y: np.ndarray) -> None:
         self.x = torch.tensor(x, dtype=torch.float32)
@@ -19,6 +85,26 @@ class SequenceDataset(Dataset):
 
     def __getitem__(self, idx: int):
         return self.x[idx], self.y[idx]
+
+
+class WindowDataset(Dataset):
+    """Lazy sliding-window dataset over a 1-D value array and precomputed,
+    gap-free start positions. Slices windows on access (low memory)."""
+
+    def __init__(self, values, starts, seq_len, pred_len) -> None:
+        self.values = torch.as_tensor(np.asarray(values), dtype=torch.float32)
+        self.starts = np.asarray(starts, dtype=np.int64)
+        self.seq_len = int(seq_len)
+        self.pred_len = int(pred_len)
+
+    def __len__(self) -> int:
+        return len(self.starts)
+
+    def __getitem__(self, idx: int):
+        s = int(self.starts[idx])
+        L = self.seq_len + self.pred_len
+        w = self.values[s:s + L].unsqueeze(-1)
+        return w[:self.seq_len], w[self.seq_len:]
 
 
 @dataclass
@@ -81,6 +167,8 @@ class DataModule:
         self.config = config
 
     def setup(self) -> DataBundle:
+        if str(self.config.data_path).endswith(".parquet"):
+            return self._setup_parquet()
         df = pd.read_csv(self.config.data_path)
         if self.config.target_col not in df.columns:
             raise ValueError(f"target_col '{self.config.target_col}' not found in data.")
@@ -173,6 +261,37 @@ class DataModule:
             test_loader=DataLoader(
                 te, batch_size=self.config.batch_size, shuffle=False, num_workers=self.config.num_workers
             ),
-            input_size=len(use_cols),       
+            input_size=len(use_cols),
             target_index=len(use_cols) - 1,
         )
+
+    def _setup_parquet(self) -> DataBundle:
+        cfg = self.config
+        time_col = cfg.time_col or "time_utc"
+        df = _read_table(cfg.data_path, columns=[time_col, "role", cfg.target_col])
+        for c in (time_col, cfg.target_col):
+            if c not in df.columns:
+                raise ValueError(f"column '{c}' not found in {cfg.data_path}")
+        series = _prepare_series(df, time_col, cfg.target_col, cfg.role, cfg.transform)
+        terms = sorted(pd.unique(_term_labels(series.index, cfg.split_type)).tolist())
+        if len(terms) < cfg.n_fold:
+            raise ValueError(f"Not enough terms ({len(terms)}) for n_fold={cfg.n_fold}.")
+        fold = _fold_indices(len(terms), cfg.n_fold, cfg.fold_numb)
+        split_terms = {k: [terms[i] for i in idxs.tolist()] for k, idxs in fold.items()}
+
+        loaders = {}
+        for name in ("train", "val", "test"):
+            values, starts = _grid_and_starts(
+                series, split_terms[name], cfg.cadence_min,
+                cfg.seq_len, cfg.pred_len, cfg.split_type)
+            ds = WindowDataset(values, starts, cfg.seq_len, cfg.pred_len)
+            print(f"[DataModule] {name}: {len(split_terms[name])} terms, "
+                  f"{len(ds):,} windows")
+            loaders[name] = DataLoader(
+                ds, batch_size=cfg.batch_size,
+                shuffle=(cfg.shuffle_train if name == "train" else False),
+                num_workers=cfg.num_workers)
+
+        return DataBundle(
+            train_loader=loaders["train"], val_loader=loaders["val"],
+            test_loader=loaders["test"], input_size=1, target_index=0)
