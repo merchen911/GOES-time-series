@@ -167,6 +167,8 @@ class DataModule:
         self.config = config
 
     def setup(self) -> DataBundle:
+        if str(self.config.data_path).endswith(".parquet"):
+            return self._setup_parquet()
         df = pd.read_csv(self.config.data_path)
         if self.config.target_col not in df.columns:
             raise ValueError(f"target_col '{self.config.target_col}' not found in data.")
@@ -259,6 +261,37 @@ class DataModule:
             test_loader=DataLoader(
                 te, batch_size=self.config.batch_size, shuffle=False, num_workers=self.config.num_workers
             ),
-            input_size=len(use_cols),       
+            input_size=len(use_cols),
             target_index=len(use_cols) - 1,
         )
+
+    def _setup_parquet(self) -> DataBundle:
+        cfg = self.config
+        time_col = cfg.time_col or "time_utc"
+        df = _read_table(cfg.data_path, columns=[time_col, "role", cfg.target_col])
+        for c in (time_col, cfg.target_col):
+            if c not in df.columns:
+                raise ValueError(f"column '{c}' not found in {cfg.data_path}")
+        series = _prepare_series(df, time_col, cfg.target_col, cfg.role, cfg.transform)
+        terms = sorted(pd.unique(_term_labels(series.index, cfg.split_type)).tolist())
+        if len(terms) < cfg.n_fold:
+            raise ValueError(f"Not enough terms ({len(terms)}) for n_fold={cfg.n_fold}.")
+        fold = _fold_indices(len(terms), cfg.n_fold, cfg.fold_numb)
+        split_terms = {k: [terms[i] for i in idxs.tolist()] for k, idxs in fold.items()}
+
+        loaders = {}
+        for name in ("train", "val", "test"):
+            values, starts = _grid_and_starts(
+                series, split_terms[name], cfg.cadence_min,
+                cfg.seq_len, cfg.pred_len, cfg.split_type)
+            ds = WindowDataset(values, starts, cfg.seq_len, cfg.pred_len)
+            print(f"[DataModule] {name}: {len(split_terms[name])} terms, "
+                  f"{len(ds):,} windows")
+            loaders[name] = DataLoader(
+                ds, batch_size=cfg.batch_size,
+                shuffle=(cfg.shuffle_train if name == "train" else False),
+                num_workers=cfg.num_workers)
+
+        return DataBundle(
+            train_loader=loaders["train"], val_loader=loaders["val"],
+            test_loader=loaders["test"], input_size=1, target_index=0)

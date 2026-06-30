@@ -102,3 +102,44 @@ class TestWindowDataset(unittest.TestCase):
         self.assertEqual(x.dtype, torch.float32)
         np.testing.assert_array_equal(x.squeeze(-1).numpy(), np.array([2.0, 3.0]))
         np.testing.assert_array_equal(y.squeeze(-1).numpy(), np.array([4.0]))
+
+
+from types import SimpleNamespace
+from data.loader import DataModule
+
+
+def _cfg(**kw):
+    base = dict(data_path=PARTICLE, target_col="p_gt10", time_col=None,
+                role="primary", transform="log10", cadence_min=5,
+                split_type="year_half", n_fold=5, fold_numb=0,
+                seq_len=288, pred_len=12, batch_size=32, shuffle_train=False,
+                num_workers=0, feature_cols=None,
+                train_ratio=0.7, val_ratio=0.15)
+    base.update(kw)
+    return SimpleNamespace(**base)
+
+
+@unittest.skipUnless(os.path.exists(PARTICLE), "real parquet not present")
+class TestSetupParquet(unittest.TestCase):
+    def test_bundle_shapes_and_nonempty(self):
+        b = DataModule(_cfg()).setup()
+        self.assertEqual(b.input_size, 1)
+        self.assertEqual(b.target_index, 0)
+        for loader in (b.train_loader, b.val_loader, b.test_loader):
+            self.assertGreater(len(loader.dataset), 0)
+        xb, yb = next(iter(b.train_loader))
+        self.assertEqual(tuple(xb.shape[1:]), (288, 1))
+        self.assertEqual(tuple(yb.shape[1:]), (12, 1))
+
+    def test_leakage_free_terms(self):
+        from data.loader import _read_table, _prepare_series, _term_labels, _fold_indices
+        c = _cfg()
+        s = _prepare_series(_read_table(c.data_path, [ "time_utc", "role", c.target_col]),
+                            "time_utc", c.target_col, c.role, c.transform)
+        terms = sorted(pd.unique(_term_labels(s.index, c.split_type)).tolist())
+        fold = _fold_indices(len(terms), c.n_fold, c.fold_numb)
+        sets = [set(idx.tolist()) for idx in fold.values()]
+        self.assertEqual(sum(len(x) for x in sets), len(terms))   # partition
+        self.assertEqual(len(sets[0] & sets[1]), 0)
+        self.assertEqual(len(sets[0] & sets[2]), 0)
+        self.assertEqual(len(sets[1] & sets[2]), 0)
