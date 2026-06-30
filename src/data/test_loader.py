@@ -1,7 +1,8 @@
 import os, tempfile, unittest
 import numpy as np
 import pandas as pd
-from data.loader import _read_table, _valid_starts, _term_labels, _prepare_series, _grid_and_starts
+import torch
+from data.loader import _read_table, _valid_starts, _term_labels, _prepare_series, _grid_and_starts, WindowDataset
 
 PROC = "/NAS/ioGuard3/vol3/spaceai/SW_framework/data/goes_data/processed"
 PARTICLE = os.path.join(PROC, "kasi_swpc_particle_5m_v02.parquet")
@@ -88,3 +89,16 @@ class TestGridAndStarts(unittest.TestCase):
         # term grids are length 4 each, concatenated -> offsets 0 and 4
         # valid starts per term: [0,1], second term +4 -> [4,5]
         np.testing.assert_array_equal(starts, np.array([0, 1, 4, 5]))
+
+
+class TestWindowDataset(unittest.TestCase):
+    def test_shapes_and_values(self):
+        values = np.arange(10.0)
+        ds = WindowDataset(values, np.array([0, 2]), seq_len=2, pred_len=1)
+        self.assertEqual(len(ds), 2)
+        x, y = ds[1]                      # start=2, L=3 -> [2,3,4]
+        self.assertEqual(tuple(x.shape), (2, 1))
+        self.assertEqual(tuple(y.shape), (1, 1))
+        self.assertEqual(x.dtype, torch.float32)
+        np.testing.assert_array_equal(x.squeeze(-1).numpy(), np.array([2.0, 3.0]))
+        np.testing.assert_array_equal(y.squeeze(-1).numpy(), np.array([4.0]))
