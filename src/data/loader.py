@@ -9,6 +9,23 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 
 
+def _read_table(path, columns=None):
+    if str(path).endswith(".parquet"):
+        return pd.read_parquet(path, columns=columns)
+    return pd.read_csv(path)
+
+
+def _valid_starts(valid, L):
+    """int64 positions i where valid[i:i+L] is entirely True."""
+    n = len(valid) - L + 1
+    if n <= 0:
+        return np.empty(0, dtype=np.int64)
+    invalid = (~np.asarray(valid)).astype(np.int64)
+    csum = np.concatenate([[0], np.cumsum(invalid)])
+    cnt = csum[L:L + n] - csum[:n]
+    return np.nonzero(cnt == 0)[0].astype(np.int64)
+
+
 class SequenceDataset(Dataset):
     def __init__(self, x: np.ndarray, y: np.ndarray) -> None:
         self.x = torch.tensor(x, dtype=torch.float32)
