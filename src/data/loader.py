@@ -26,6 +26,34 @@ def _valid_starts(valid, L):
     return np.nonzero(cnt == 0)[0].astype(np.int64)
 
 
+def _term_labels(index, split_type):
+    year = index.year.to_numpy().astype("U4")
+    if split_type == "year":
+        return year
+    if split_type == "year_half":
+        half = np.where(index.month.to_numpy() <= 6, "H1", "H2")
+        return np.char.add(np.char.add(year, "-"), half)
+    raise ValueError(f"Unsupported split_type: {split_type}")
+
+
+def _prepare_series(df, time_col, target_col, role, transform, role_col="role"):
+    sub = df
+    if role is not None and role_col in df.columns:
+        sub = df[df[role_col] == role]
+    sub = sub[[time_col, target_col]].copy()
+    sub[time_col] = pd.to_datetime(sub[time_col])
+    sub = (sub.dropna(subset=[time_col])
+              .drop_duplicates(time_col, keep="last")
+              .sort_values(time_col))
+    s = sub.set_index(time_col)[target_col].astype("float64")
+    if transform == "log10":
+        with np.errstate(divide="ignore", invalid="ignore"):
+            s = np.log10(s.where(s > 0))
+    elif transform != "none":
+        raise ValueError(f"unknown transform: {transform}")
+    return s
+
+
 class SequenceDataset(Dataset):
     def __init__(self, x: np.ndarray, y: np.ndarray) -> None:
         self.x = torch.tensor(x, dtype=torch.float32)
