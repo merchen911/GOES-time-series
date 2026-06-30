@@ -26,6 +26,12 @@ def exp_parser() -> argparse.ArgumentParser:
     parser.add_argument("--train_ratio", type=float, default=0.7)
     parser.add_argument("--val_ratio", type=float, default=0.15)
     parser.add_argument("--shuffle_train", action="store_true")
+    parser.add_argument("--role", type=str, default="primary",
+                        help="parquet: which 'role' rows to use (primary/secondary)")
+    parser.add_argument("--transform", type=str, default="log10",
+                        choices=["none", "log10"], help="target transform")
+    parser.add_argument("--cadence_min", type=int, default=5,
+                        help="regular-grid step in minutes for parquet windowing")
 
     # model comparison
     parser.add_argument("--models", nargs="+", default=["lstm", "timesnet"])
@@ -67,6 +73,7 @@ def config_postprocess(config):
         raise ValueError("n_fold must be >= 3.")
     if not 0 <= config.fold_numb < config.n_fold:
         raise ValueError("fold_numb must be within [0, n_fold).")
-    if config.split_type in {"year", "year_half"} and not config.time_col:
+    if (config.split_type in {"year", "year_half"} and not config.time_col
+            and not str(config.data_path).endswith(".parquet")):
         raise ValueError("time-based k-fold requires --time_col.")
     return config
