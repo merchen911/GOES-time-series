@@ -54,6 +54,27 @@ def _prepare_series(df, time_col, target_col, role, transform, role_col="role"):
     return s
 
 
+def _grid_and_starts(series, terms, cadence_min, seq_len, pred_len, split_type):
+    L = seq_len + pred_len
+    step = pd.Timedelta(minutes=cadence_min)
+    labels = _term_labels(series.index, split_type)
+    all_vals, all_starts, offset = [], [], 0
+    for term in sorted(terms):
+        sub = series[labels == term]
+        if sub.empty:
+            continue
+        grid = pd.date_range(sub.index.min(), sub.index.max(), freq=step)
+        g = sub.reindex(grid).to_numpy(dtype="float64")
+        starts = _valid_starts(~np.isnan(g), L)
+        all_vals.append(g)
+        if len(starts):
+            all_starts.append(starts + offset)
+        offset += len(g)
+    values = np.concatenate(all_vals) if all_vals else np.empty(0, dtype="float64")
+    starts = np.concatenate(all_starts) if all_starts else np.empty(0, dtype=np.int64)
+    return values, starts
+
+
 class SequenceDataset(Dataset):
     def __init__(self, x: np.ndarray, y: np.ndarray) -> None:
         self.x = torch.tensor(x, dtype=torch.float32)
