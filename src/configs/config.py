@@ -32,6 +32,14 @@ def exp_parser() -> argparse.ArgumentParser:
                         choices=["none", "log10"], help="target transform")
     parser.add_argument("--cadence_min", type=int, default=5,
                         help="regular-grid step in minutes for parquet windowing")
+    parser.add_argument("--channels", nargs="*", default=None,
+                        help="multivariate input channels as PATH:COL (>=1). "
+                             "If omitted, uses --data_path:--target_col.")
+    parser.add_argument("--target_cols", nargs="*", default=None,
+                        help="prediction target columns (subset of channels). "
+                             "Default: first channel's column.")
+    parser.add_argument("--min_bin_count", type=int, default=1,
+                        help="min native samples per resample bin to keep it")
 
     # model comparison
     parser.add_argument("--models", nargs="+", default=["lstm", "timesnet"])
