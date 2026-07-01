@@ -15,6 +15,34 @@ def _read_table(path, columns=None):
     return pd.read_csv(path)
 
 
+def _parse_channels(specs):
+    out = []
+    for spec in specs:
+        if ":" not in spec:
+            raise ValueError(f"channel spec must be PATH:COL, got {spec!r}")
+        path, col = spec.rsplit(":", 1)
+        if not path or not col:
+            raise ValueError(f"invalid channel spec {spec!r}")
+        out.append((path, col))
+    return out
+
+
+def _resolve_channels(cfg):
+    if getattr(cfg, "channels", None):
+        channels = _parse_channels(cfg.channels)
+    else:
+        channels = [(cfg.data_path, cfg.target_col)]
+    cols = [c for _, c in channels]
+    if getattr(cfg, "target_cols", None):
+        target_cols = list(cfg.target_cols)
+    else:
+        target_cols = [cols[0]]
+    for t in target_cols:
+        if t not in cols:
+            raise ValueError(f"target col {t!r} not among channels {cols}")
+    return channels, target_cols
+
+
 def _valid_starts(valid, L):
     """int64 positions i where valid[i:i+L] is entirely True."""
     n = len(valid) - L + 1
@@ -54,23 +82,34 @@ def _prepare_series(df, time_col, target_col, role, transform, role_col="role"):
     return s
 
 
-def _grid_and_starts(series, terms, cadence_min, seq_len, pred_len, split_type):
+def _grid_and_starts(data, terms, cadence_min, seq_len, pred_len, split_type,
+                     transform="none", min_bin_count=1):
+    frame = data.to_frame() if isinstance(data, pd.Series) else data
     L = seq_len + pred_len
-    step = pd.Timedelta(minutes=cadence_min)
-    labels = _term_labels(series.index, split_type)
+    rule = f"{cadence_min}min"
+    labels = _term_labels(frame.index, split_type)
     all_vals, all_starts, offset = [], [], 0
     for term in sorted(terms):
-        sub = series[labels == term]
+        sub = frame[labels == term]
         if sub.empty:
             continue
-        grid = pd.date_range(sub.index.min(), sub.index.max(), freq=step)
-        g = sub.reindex(grid).to_numpy(dtype="float64")
-        starts = _valid_starts(~np.isnan(g), L)
-        all_vals.append(g)
+        mean = sub.resample(rule).mean()
+        cnt = sub.resample(rule).count()
+        mean = mean.mask(cnt < min_bin_count)
+        if transform == "log10":
+            with np.errstate(divide="ignore", invalid="ignore"):
+                mean = np.log10(mean.where(mean > 0))
+        elif transform != "none":
+            raise ValueError(f"unknown transform: {transform}")
+        vals = mean.to_numpy(dtype="float64")
+        valid = ~np.isnan(vals).any(axis=1)
+        starts = _valid_starts(valid, L)
+        all_vals.append(vals)
         if len(starts):
             all_starts.append(starts + offset)
-        offset += len(g)
-    values = np.concatenate(all_vals) if all_vals else np.empty(0, dtype="float64")
+        offset += len(vals)
+    C = frame.shape[1]
+    values = np.concatenate(all_vals) if all_vals else np.empty((0, C), dtype="float64")
     starts = np.concatenate(all_starts) if all_starts else np.empty(0, dtype=np.int64)
     return values, starts
 
@@ -88,14 +127,19 @@ class SequenceDataset(Dataset):
 
 
 class WindowDataset(Dataset):
-    """Lazy sliding-window dataset over a 1-D value array and precomputed,
-    gap-free start positions. Slices windows on access (low memory)."""
+    """Lazy sliding-window dataset over a (G,) or (G,C) value array and
+    precomputed, gap-free start positions. Slices windows on access."""
 
-    def __init__(self, values, starts, seq_len, pred_len) -> None:
-        self.values = torch.as_tensor(np.asarray(values), dtype=torch.float32)
+    def __init__(self, values, starts, seq_len, pred_len, target_idx=None) -> None:
+        v = np.asarray(values)
+        if v.ndim == 1:
+            v = v[:, None]
+        self.values = torch.as_tensor(v, dtype=torch.float32)
         self.starts = np.asarray(starts, dtype=np.int64)
         self.seq_len = int(seq_len)
         self.pred_len = int(pred_len)
+        self.target_idx = (list(range(v.shape[1])) if target_idx is None
+                           else list(target_idx))
 
     def __len__(self) -> int:
         return len(self.starts)
@@ -103,8 +147,8 @@ class WindowDataset(Dataset):
     def __getitem__(self, idx: int):
         s = int(self.starts[idx])
         L = self.seq_len + self.pred_len
-        w = self.values[s:s + L].unsqueeze(-1)
-        return w[:self.seq_len], w[self.seq_len:]
+        w = self.values[s:s + L]
+        return w[:self.seq_len], w[self.seq_len:][:, self.target_idx]
 
 
 @dataclass
@@ -114,6 +158,7 @@ class DataBundle:
     test_loader: DataLoader
     input_size: int
     target_index: int
+    output_size: int = 1
 
 
 def _build_windows(values: np.ndarray, seq_len: int, pred_len: int) -> Tuple[np.ndarray, np.ndarray]:
@@ -268,23 +313,32 @@ class DataModule:
     def _setup_parquet(self) -> DataBundle:
         cfg = self.config
         time_col = cfg.time_col or "time_utc"
-        df = _read_table(cfg.data_path, columns=[time_col, "role", cfg.target_col])
-        for c in (time_col, cfg.target_col):
-            if c not in df.columns:
-                raise ValueError(f"column '{c}' not found in {cfg.data_path}")
-        series = _prepare_series(df, time_col, cfg.target_col, cfg.role, cfg.transform)
-        terms = sorted(pd.unique(_term_labels(series.index, cfg.split_type)).tolist())
+        channels, target_cols = _resolve_channels(cfg)
+        cols, series_list = [], []
+        for path, col in channels:
+            df = _read_table(path, columns=[time_col, "role", col])
+            for c in (time_col, col):
+                if c not in df.columns:
+                    raise ValueError(f"column '{c}' not found in {path}")
+            series_list.append(_prepare_series(df, time_col, col, cfg.role, "none").rename(col))
+            cols.append(col)
+        frame = pd.concat(series_list, axis=1).sort_index()
+        frame.columns = cols
+
+        terms = sorted(pd.unique(_term_labels(frame.index, cfg.split_type)).tolist())
         if len(terms) < cfg.n_fold:
             raise ValueError(f"Not enough terms ({len(terms)}) for n_fold={cfg.n_fold}.")
         fold = _fold_indices(len(terms), cfg.n_fold, cfg.fold_numb)
         split_terms = {k: [terms[i] for i in idxs.tolist()] for k, idxs in fold.items()}
+        target_idx = [cols.index(t) for t in target_cols]
 
         loaders = {}
         for name in ("train", "val", "test"):
             values, starts = _grid_and_starts(
-                series, split_terms[name], cfg.cadence_min,
-                cfg.seq_len, cfg.pred_len, cfg.split_type)
-            ds = WindowDataset(values, starts, cfg.seq_len, cfg.pred_len)
+                frame, split_terms[name], cfg.cadence_min, cfg.seq_len, cfg.pred_len,
+                cfg.split_type, transform=cfg.transform, min_bin_count=cfg.min_bin_count)
+            ds = WindowDataset(values, starts, cfg.seq_len, cfg.pred_len,
+                               target_idx=target_idx)
             print(f"[DataModule] {name}: {len(split_terms[name])} terms, "
                   f"{len(ds):,} windows")
             loaders[name] = DataLoader(
@@ -294,4 +348,5 @@ class DataModule:
 
         return DataBundle(
             train_loader=loaders["train"], val_loader=loaders["val"],
-            test_loader=loaders["test"], input_size=1, target_index=0)
+            test_loader=loaders["test"], input_size=len(cols),
+            target_index=target_idx[0], output_size=len(target_cols))
