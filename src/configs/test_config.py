@@ -26,3 +26,22 @@ class TestConfig(unittest.TestCase):
         c = exp_parser().parse_args(argv)
         with self.assertRaises(ValueError):
             config_postprocess(c)
+
+
+class TestMultivarFlags(unittest.TestCase):
+    def _parse(self, *extra):
+        argv = ["--data_path", "x.parquet", "--target_col", "p_gt10", *extra]
+        return exp_parser().parse_args(argv)
+
+    def test_defaults(self):
+        c = self._parse()
+        self.assertIsNone(c.channels)
+        self.assertIsNone(c.target_cols)
+        self.assertEqual(c.min_bin_count, 1)
+
+    def test_lists_parse(self):
+        c = self._parse("--channels", "a.parquet:p_gt10", "b.parquet:xrs_long",
+                        "--target_cols", "p_gt10", "--min_bin_count", "3")
+        self.assertEqual(c.channels, ["a.parquet:p_gt10", "b.parquet:xrs_long"])
+        self.assertEqual(c.target_cols, ["p_gt10"])
+        self.assertEqual(c.min_bin_count, 3)
