@@ -111,8 +111,10 @@ from data.loader import DataModule
 
 
 def _cfg(**kw):
-    base = dict(data_path=PARTICLE, target_col="p_gt10", time_col=None,
+    base = dict(data_path=PARTICLE, target_col="p_gt10", channels=None,
+                target_cols=None, time_col=None,
                 role="primary", transform="log10", cadence_min=5,
+                min_bin_count=1,
                 split_type="year_half", n_fold=5, fold_numb=0,
                 seq_len=288, pred_len=12, batch_size=32, shuffle_train=False,
                 num_workers=0, feature_cols=None,
@@ -234,3 +236,44 @@ class TestGridResampleMean(unittest.TestCase):
                                           transform="none", min_bin_count=1)
         self.assertEqual(values.shape, (3, 2))
         np.testing.assert_array_equal(starts, np.array([0, 2]))  # row 1 invalid
+
+
+XRAY = os.path.join(PROC, "kasi_swpc_xray_1m_v02.parquet")
+
+
+def _cfg_mv(**kw):
+    base = dict(data_path=PARTICLE, target_col="p_gt10", channels=None,
+                target_cols=None, time_col=None, role="primary",
+                transform="log10", cadence_min=5, min_bin_count=1,
+                split_type="year_half", n_fold=5, fold_numb=0,
+                seq_len=288, pred_len=12, batch_size=32, shuffle_train=False,
+                num_workers=0, feature_cols=None, train_ratio=0.7, val_ratio=0.15)
+    base.update(kw)
+    return SimpleNamespace(**base)
+
+
+@unittest.skipUnless(os.path.exists(PARTICLE), "real parquet not present")
+class TestSetupUnivariateRegression(unittest.TestCase):
+    def test_counts_match_recorded(self):
+        b = DataModule(_cfg_mv()).setup()
+        self.assertEqual(b.input_size, 1)
+        self.assertEqual(b.output_size, 1)
+        self.assertEqual(len(b.train_loader.dataset), 1_076_731)
+        self.assertEqual(len(b.val_loader.dataset), 370_516)
+        self.assertEqual(len(b.test_loader.dataset), 350_429)
+
+
+@unittest.skipUnless(os.path.exists(PARTICLE) and os.path.exists(XRAY),
+                     "real parquet not present")
+class TestSetupMultivar(unittest.TestCase):
+    def test_two_channels_one_target(self):
+        cfg = _cfg_mv(channels=[f"{PARTICLE}:p_gt10", f"{XRAY}:xrs_long"],
+                      target_cols=["p_gt10"])
+        b = DataModule(cfg).setup()
+        self.assertEqual(b.input_size, 2)
+        self.assertEqual(b.output_size, 1)
+        for loader in (b.train_loader, b.val_loader, b.test_loader):
+            self.assertGreater(len(loader.dataset), 0)
+        xb, yb = next(iter(b.train_loader))
+        self.assertEqual(tuple(xb.shape[1:]), (288, 2))
+        self.assertEqual(tuple(yb.shape[1:]), (12, 1))
