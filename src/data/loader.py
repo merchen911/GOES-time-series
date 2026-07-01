@@ -15,6 +15,34 @@ def _read_table(path, columns=None):
     return pd.read_csv(path)
 
 
+def _parse_channels(specs):
+    out = []
+    for spec in specs:
+        if ":" not in spec:
+            raise ValueError(f"channel spec must be PATH:COL, got {spec!r}")
+        path, col = spec.rsplit(":", 1)
+        if not path or not col:
+            raise ValueError(f"invalid channel spec {spec!r}")
+        out.append((path, col))
+    return out
+
+
+def _resolve_channels(cfg):
+    if getattr(cfg, "channels", None):
+        channels = _parse_channels(cfg.channels)
+    else:
+        channels = [(cfg.data_path, cfg.target_col)]
+    cols = [c for _, c in channels]
+    if getattr(cfg, "target_cols", None):
+        target_cols = list(cfg.target_cols)
+    else:
+        target_cols = [cols[0]]
+    for t in target_cols:
+        if t not in cols:
+            raise ValueError(f"target col {t!r} not among channels {cols}")
+    return channels, target_cols
+
+
 def _valid_starts(valid, L):
     """int64 positions i where valid[i:i+L] is entirely True."""
     n = len(valid) - L + 1
