@@ -82,23 +82,34 @@ def _prepare_series(df, time_col, target_col, role, transform, role_col="role"):
     return s
 
 
-def _grid_and_starts(series, terms, cadence_min, seq_len, pred_len, split_type):
+def _grid_and_starts(data, terms, cadence_min, seq_len, pred_len, split_type,
+                     transform="none", min_bin_count=1):
+    frame = data.to_frame() if isinstance(data, pd.Series) else data
     L = seq_len + pred_len
-    step = pd.Timedelta(minutes=cadence_min)
-    labels = _term_labels(series.index, split_type)
+    rule = f"{cadence_min}min"
+    labels = _term_labels(frame.index, split_type)
     all_vals, all_starts, offset = [], [], 0
     for term in sorted(terms):
-        sub = series[labels == term]
+        sub = frame[labels == term]
         if sub.empty:
             continue
-        grid = pd.date_range(sub.index.min(), sub.index.max(), freq=step)
-        g = sub.reindex(grid).to_numpy(dtype="float64")
-        starts = _valid_starts(~np.isnan(g), L)
-        all_vals.append(g)
+        mean = sub.resample(rule).mean()
+        cnt = sub.resample(rule).count()
+        mean = mean.mask(cnt < min_bin_count)
+        if transform == "log10":
+            with np.errstate(divide="ignore", invalid="ignore"):
+                mean = np.log10(mean.where(mean > 0))
+        elif transform != "none":
+            raise ValueError(f"unknown transform: {transform}")
+        vals = mean.to_numpy(dtype="float64")
+        valid = ~np.isnan(vals).any(axis=1)
+        starts = _valid_starts(valid, L)
+        all_vals.append(vals)
         if len(starts):
             all_starts.append(starts + offset)
-        offset += len(g)
-    values = np.concatenate(all_vals) if all_vals else np.empty(0, dtype="float64")
+        offset += len(vals)
+    C = frame.shape[1]
+    values = np.concatenate(all_vals) if all_vals else np.empty((0, C), dtype="float64")
     starts = np.concatenate(all_starts) if all_starts else np.empty(0, dtype=np.int64)
     return values, starts
 

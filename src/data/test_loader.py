@@ -202,3 +202,35 @@ class TestDataBundleOutputSize(unittest.TestCase):
         b = DataBundle(train_loader=None, val_loader=None, test_loader=None,
                        input_size=2, target_index=0)
         self.assertEqual(b.output_size, 1)
+
+
+class TestGridResampleMean(unittest.TestCase):
+    def _frame(self, times, **cols):
+        idx = pd.to_datetime(times, utc=True)
+        return pd.DataFrame(cols, index=idx)
+
+    def test_mean_then_log10(self):
+        # two 1-min samples in one 5-min bin: mean(10,1000)=505 -> log10(505)
+        f = self._frame(["2020-01-01T00:00", "2020-01-01T00:01"], a=[10.0, 1000.0])
+        values, starts = _grid_and_starts(f, ["2020-H1"], 5, 1, 0, "year_half",
+                                          transform="log10", min_bin_count=1)
+        # L=1 window on a single valid bin -> one row, value log10(505)
+        self.assertEqual(values.shape, (1, 1))
+        self.assertAlmostEqual(float(values[0, 0]), np.log10(505.0), places=6)
+
+    def test_min_bin_count_masks_sparse_bin(self):
+        # 4 one-min samples in a 5-min bin; require >=5 -> bin becomes NaN
+        f = self._frame([f"2020-01-01T00:0{m}" for m in range(4)], a=[1.0, 2.0, 3.0, 4.0])
+        values, starts = _grid_and_starts(f, ["2020-H1"], 5, 1, 0, "year_half",
+                                          transform="none", min_bin_count=5)
+        self.assertTrue(np.isnan(values[0, 0]))
+        self.assertEqual(len(starts), 0)
+
+    def test_multichannel_and_validity(self):
+        # channel b missing its second bin -> that row invalid for AND rule
+        idx = pd.date_range("2020-01-01T00:00", periods=3, freq="5min", tz="UTC")
+        f = pd.DataFrame({"a": [1.0, 2.0, 3.0], "b": [1.0, np.nan, 3.0]}, index=idx)
+        values, starts = _grid_and_starts(f, ["2020-H1"], 5, 1, 0, "year_half",
+                                          transform="none", min_bin_count=1)
+        self.assertEqual(values.shape, (3, 2))
+        np.testing.assert_array_equal(starts, np.array([0, 2]))  # row 1 invalid
