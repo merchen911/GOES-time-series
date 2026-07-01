@@ -116,14 +116,19 @@ class SequenceDataset(Dataset):
 
 
 class WindowDataset(Dataset):
-    """Lazy sliding-window dataset over a 1-D value array and precomputed,
-    gap-free start positions. Slices windows on access (low memory)."""
+    """Lazy sliding-window dataset over a (G,) or (G,C) value array and
+    precomputed, gap-free start positions. Slices windows on access."""
 
-    def __init__(self, values, starts, seq_len, pred_len) -> None:
-        self.values = torch.as_tensor(np.asarray(values), dtype=torch.float32)
+    def __init__(self, values, starts, seq_len, pred_len, target_idx=None) -> None:
+        v = np.asarray(values)
+        if v.ndim == 1:
+            v = v[:, None]
+        self.values = torch.as_tensor(v, dtype=torch.float32)
         self.starts = np.asarray(starts, dtype=np.int64)
         self.seq_len = int(seq_len)
         self.pred_len = int(pred_len)
+        self.target_idx = (list(range(v.shape[1])) if target_idx is None
+                           else list(target_idx))
 
     def __len__(self) -> int:
         return len(self.starts)
@@ -131,8 +136,8 @@ class WindowDataset(Dataset):
     def __getitem__(self, idx: int):
         s = int(self.starts[idx])
         L = self.seq_len + self.pred_len
-        w = self.values[s:s + L].unsqueeze(-1)
-        return w[:self.seq_len], w[self.seq_len:]
+        w = self.values[s:s + L]
+        return w[:self.seq_len], w[self.seq_len:][:, self.target_idx]
 
 
 @dataclass
@@ -142,6 +147,7 @@ class DataBundle:
     test_loader: DataLoader
     input_size: int
     target_index: int
+    output_size: int = 1
 
 
 def _build_windows(values: np.ndarray, seq_len: int, pred_len: int) -> Tuple[np.ndarray, np.ndarray]:
