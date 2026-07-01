@@ -176,3 +176,29 @@ class TestParseChannels(unittest.TestCase):
                   data_path=None, target_col=None)
         with self.assertRaises(ValueError):
             _resolve_channels(cfg)
+
+
+class TestWindowDatasetMV(unittest.TestCase):
+    def test_2d_values_and_target_idx(self):
+        values = np.arange(20.0).reshape(10, 2)   # (G=10, C=2)
+        ds = WindowDataset(values, np.array([0, 2]), seq_len=2, pred_len=1,
+                           target_idx=[1])
+        x, y = ds[1]                               # start=2, L=3 rows 2,3,4
+        self.assertEqual(tuple(x.shape), (2, 2))   # (seq, C)
+        self.assertEqual(tuple(y.shape), (1, 1))   # (pred, T=1)
+        np.testing.assert_array_equal(x.numpy(), np.array([[4., 5.], [6., 7.]]))
+        np.testing.assert_array_equal(y.squeeze(-1).numpy(), np.array([9.]))  # col 1 of row 4
+
+    def test_1d_values_still_work(self):
+        ds = WindowDataset(np.arange(10.0), np.array([0]), seq_len=2, pred_len=1)
+        x, y = ds[0]
+        self.assertEqual(tuple(x.shape), (2, 1))
+        self.assertEqual(tuple(y.shape), (1, 1))
+
+
+class TestDataBundleOutputSize(unittest.TestCase):
+    def test_default_output_size(self):
+        from data.loader import DataBundle
+        b = DataBundle(train_loader=None, val_loader=None, test_loader=None,
+                       input_size=2, target_index=0)
+        self.assertEqual(b.output_size, 1)
