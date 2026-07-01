@@ -3,6 +3,8 @@ import numpy as np
 import pandas as pd
 import torch
 from data.loader import _read_table, _valid_starts, _term_labels, _prepare_series, _grid_and_starts, WindowDataset
+from types import SimpleNamespace as _NS
+from data.loader import _parse_channels, _resolve_channels
 
 PROC = "/NAS/ioGuard3/vol3/spaceai/SW_framework/data/goes_data/processed"
 PARTICLE = os.path.join(PROC, "kasi_swpc_particle_5m_v02.parquet")
@@ -143,3 +145,34 @@ class TestSetupParquet(unittest.TestCase):
         self.assertEqual(len(sets[0] & sets[1]), 0)
         self.assertEqual(len(sets[0] & sets[2]), 0)
         self.assertEqual(len(sets[1] & sets[2]), 0)
+
+
+class TestParseChannels(unittest.TestCase):
+    def test_parse_ok(self):
+        self.assertEqual(
+            _parse_channels(["/a/b.parquet:p_gt10", "/c.parquet:xrs_long"]),
+            [("/a/b.parquet", "p_gt10"), ("/c.parquet", "xrs_long")])
+
+    def test_parse_no_colon_errors(self):
+        with self.assertRaises(ValueError):
+            _parse_channels(["/a/b.parquet"])
+
+    def test_resolve_defaults_from_data_path(self):
+        cfg = _NS(channels=None, target_cols=None,
+                  data_path="p.parquet", target_col="p_gt10")
+        ch, tgt = _resolve_channels(cfg)
+        self.assertEqual(ch, [("p.parquet", "p_gt10")])
+        self.assertEqual(tgt, ["p_gt10"])
+
+    def test_resolve_explicit_and_target_subset(self):
+        cfg = _NS(channels=["p.parquet:p_gt10", "x.parquet:xrs_long"],
+                  target_cols=["xrs_long"], data_path=None, target_col=None)
+        ch, tgt = _resolve_channels(cfg)
+        self.assertEqual([c for _, c in ch], ["p_gt10", "xrs_long"])
+        self.assertEqual(tgt, ["xrs_long"])
+
+    def test_resolve_bad_target_errors(self):
+        cfg = _NS(channels=["p.parquet:p_gt10"], target_cols=["nope"],
+                  data_path=None, target_col=None)
+        with self.assertRaises(ValueError):
+            _resolve_channels(cfg)
