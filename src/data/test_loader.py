@@ -205,6 +205,20 @@ class TestDataBundleOutputSize(unittest.TestCase):
                        input_size=2, target_index=0)
         self.assertEqual(b.output_size, 1)
 
+    def test_target_indices_defaults_to_single(self):
+        from data.loader import DataBundle
+        b = DataBundle(train_loader=None, val_loader=None, test_loader=None,
+                       input_size=3, target_index=2)
+        self.assertEqual(b.target_indices, [2])  # backward compat: [target_index]
+
+    def test_target_indices_explicit_multi(self):
+        from data.loader import DataBundle
+        b = DataBundle(train_loader=None, val_loader=None, test_loader=None,
+                       input_size=3, target_index=0, output_size=2,
+                       target_indices=[0, 2])
+        self.assertEqual(b.target_indices, [0, 2])
+        self.assertEqual(b.output_size, 2)
+
 
 class TestGridResampleMean(unittest.TestCase):
     def _frame(self, times, **cols):
@@ -274,6 +288,19 @@ class TestSetupMultivar(unittest.TestCase):
         self.assertEqual(b.output_size, 1)
         for loader in (b.train_loader, b.val_loader, b.test_loader):
             self.assertGreater(len(loader.dataset), 0)
+        self.assertEqual(b.target_indices, [0])
         xb, yb = next(iter(b.train_loader))
         self.assertEqual(tuple(xb.shape[1:]), (288, 2))
         self.assertEqual(tuple(yb.shape[1:]), (12, 1))
+
+    def test_two_channels_multi_target(self):
+        # forecast BOTH channels -> output_size 2, target_indices [0,1], y=(·,12,2)
+        cfg = _cfg_mv(channels=[f"{PARTICLE}:p_gt10", f"{XRAY}:xrs_long"],
+                      target_cols=["p_gt10", "xrs_long"])
+        b = DataModule(cfg).setup()
+        self.assertEqual(b.input_size, 2)
+        self.assertEqual(b.output_size, 2)
+        self.assertEqual(b.target_indices, [0, 1])
+        xb, yb = next(iter(b.train_loader))
+        self.assertEqual(tuple(xb.shape[1:]), (288, 2))
+        self.assertEqual(tuple(yb.shape[1:]), (12, 2))

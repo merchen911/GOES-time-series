@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Dict, Tuple
+from dataclasses import dataclass, field
+from typing import Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -159,6 +159,12 @@ class DataBundle:
     input_size: int
     target_index: int
     output_size: int = 1
+    target_indices: List[int] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        # keep target_indices authoritative; default to [target_index]
+        if not self.target_indices:
+            self.target_indices = [self.target_index]
 
 
 def _build_windows(values: np.ndarray, seq_len: int, pred_len: int) -> Tuple[np.ndarray, np.ndarray]:
@@ -349,4 +355,5 @@ class DataModule:
         return DataBundle(
             train_loader=loaders["train"], val_loader=loaders["val"],
             test_loader=loaders["test"], input_size=len(cols),
-            target_index=target_idx[0], output_size=len(target_cols))
+            target_index=target_idx[0], output_size=len(target_cols),
+            target_indices=target_idx)
