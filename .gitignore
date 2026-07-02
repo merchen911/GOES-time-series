@@ -3,3 +3,6 @@ __pycache__/
 runs/
 .venv/
 .ipynb_checkpoints/
+.superpowers/
+ckpt/
+*.pt
