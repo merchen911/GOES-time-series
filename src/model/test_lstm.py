@@ -17,7 +17,7 @@ class TestLSTMMultiStep(unittest.TestCase):
         # multivariate input (C=2), single target -> (B, pred_len, 1)
         for seq_len, pred_len in [(24, 1), (288, 12), (864, 288)]:
             m = build_model("lstm", _cfg(seq_len, pred_len),
-                            input_size=2, target_index=0)
+                            input_size=2, target_indices=[0])
             x = torch.randn(4, seq_len, 2)
             y = m(x)
             self.assertEqual(tuple(y.shape), (4, pred_len, 1),
@@ -25,13 +25,33 @@ class TestLSTMMultiStep(unittest.TestCase):
 
     def test_train_step_shapes_align(self):
         # loss between pred and (B, pred_len, 1) target must compute + backprop
-        m = build_model("lstm", _cfg(576, 144), input_size=3, target_index=1)
+        m = build_model("lstm", _cfg(576, 144), input_size=3, target_indices=[1])
         x = torch.randn(8, 576, 3)
         target = torch.randn(8, 144, 1)
         loss = torch.nn.functional.mse_loss(m(x), target)
         loss.backward()
         grads = [p.grad for p in m.parameters() if p.grad is not None]
         self.assertTrue(len(grads) > 0 and any(g.abs().sum() > 0 for g in grads))
+
+
+class TestLSTMMultiTarget(unittest.TestCase):
+    def test_multi_target_output_shape(self):
+        # multivariate input C=3, forecast 2 target channels -> (B, pred_len, 2)
+        m = build_model("lstm", _cfg(288, 12), input_size=3, target_indices=[0, 2])
+        x = torch.randn(4, 288, 3)
+        y = m(x)
+        self.assertEqual(tuple(y.shape), (4, 12, 2))
+
+    def test_multi_target_matches_target_and_backprops(self):
+        m = build_model("lstm", _cfg(288, 12), input_size=2, target_indices=[0, 1])
+        x = torch.randn(6, 288, 2)
+        target = torch.randn(6, 12, 2)          # both channels forecast
+        pred = m(x)
+        self.assertEqual(tuple(pred.shape), tuple(target.shape))
+        loss = torch.nn.functional.mse_loss(pred, target)
+        loss.backward()
+        self.assertTrue(any(p.grad is not None and p.grad.abs().sum() > 0
+                            for p in m.parameters()))
 
 
 if __name__ == "__main__":
