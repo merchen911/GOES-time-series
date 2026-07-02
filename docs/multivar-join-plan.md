@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - Work ONLY in `workdir/sw-framework-v002/`; never modify `sw-framework-v001/` or the read-only KASI DB at `/NAS/ioGuard3/vol0/...`.
-- Data at `/NAS/ioGuard3/vol3/spaceai/SW_framework/data/goes_data/processed/`: `kasi_swpc_particle_5m_v02.parquet` (`p_gt10`), `kasi_swpc_xray_1m_v02.parquet` (`xrs_long`).
+- Data at `data/goes_data/processed/`: `kasi_swpc_particle_5m_v02.parquet` (`p_gt10`), `kasi_swpc_xray_1m_v02.parquet` (`xrs_long`).
 - Grid = `resample("{cadence_min}min").mean()` per term; a bin is valid for a channel iff it has `>= min_bin_count` native samples (mask via `resample(...).count()`), else NaN.
 - Transform order: **mean on RAW flux first, THEN log10** (`np.log10(mean.where(mean > 0))`).
 - Row validity = ALL channels present (`~np.isnan(vals).any(axis=1)`); window rule unchanged (whole `L=seq_len+pred_len` valid, never crossing a half-year term boundary).
@@ -19,7 +19,7 @@
 - `seq_len`/`pred_len` are in 5-min steps. Channel column names are assumed distinct.
 - Run tests with `python3.12` from `workdir/sw-framework-v002/src`: `python3.12 -m unittest data.test_loader configs.test_config -v`.
 - Commit messages end with: `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>` (commit via `git -c user.name='Claude Code' -c user.email='noreply@anthropic.com' commit`).
-- After each task append a dated line to `docs/sw-framework-v002/multivar-join-design.md` §8.
+- After each task append a dated line to `docs/multivar-join-design.md` §8.
 
 ---
 
@@ -546,7 +546,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 ### Task 6: Update docs progress log
 
 **Files:**
-- Modify: `docs/sw-framework-v002/multivar-join-design.md` §8
+- Modify: `docs/multivar-join-design.md` §8
 
 - [ ] **Step 1: Append progress entries**
 
@@ -554,7 +554,7 @@ Add under §8, one line per completed task summarizing Tasks 1–5 (config flags
 
 - [ ] **Step 2: Verify the design doc reads cleanly**
 
-Run: `sed -n '/## 8/,$p' docs/sw-framework-v002/multivar-join-design.md`
+Run: `sed -n '/## 8/,$p' docs/multivar-join-design.md`
 Expected: entries present, no placeholders.
 
 ---

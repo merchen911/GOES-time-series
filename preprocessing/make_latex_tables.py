@@ -1,7 +1,7 @@
 """Generate a LaTeX (+ later PDF) report of the trainable-sample tables.
 
 Numbers are recomputed live via count_fold_samples so the document never drifts
-from the data. Output: docs/preprocessing/fold_sample_tables.tex
+from the data. Output path is set by SW_TABLES_OUT (default: ./fold_sample_tables.tex).
 """
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ import count_fold_samples as cfs
 import term_split as ts
 
 DAY = cfs.DAY
-OUT = "../../docs/preprocessing/fold_sample_tables.tex"
+OUT = os.environ.get("SW_TABLES_OUT", "fold_sample_tables.tex")
 HIST_DAYS = [7, 5, 3, 2, 1]
 PRED_DAYS = [1, 3]
 FOCUS_HIST, FOCUS_PRED = 3, 1  # recommended config for the per-fold table

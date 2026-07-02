@@ -6,3 +6,16 @@ runs/
 .superpowers/
 ckpt/
 *.pt
+.env
+
+# Data is shared separately — never commit datasets or their derivatives
+*.parquet
+*.csv
+*.nc
+*.npy
+*.npz
+*.h5
+*.hdf5
+*.pkl
+# Generated analysis tables (regenerate via preprocessing/make_latex_tables.py)
+fold_sample_tables.*

@@ -11,11 +11,11 @@
 ## Global Constraints
 
 - Work ONLY in `workdir/sw-framework-v002/`; never modify `sw-framework-v001/` (backup) or the read-only KASI DB at `/NAS/ioGuard3/vol0/...`.
-- Data lives at `/NAS/ioGuard3/vol3/spaceai/SW_framework/data/goes_data/processed/` (e.g. `kasi_swpc_particle_5m_v02.parquet`).
+- Data lives at `data/goes_data/processed/` (e.g. `kasi_swpc_particle_5m_v02.parquet`).
 - Run tests with `python3.12` (3.10 lacks the libs). From `workdir/sw-framework-v002/src`: `python3.12 -m unittest data.test_loader -v`.
 - Window rule = option 1: the whole `L = seq_len + pred_len` window must be non-missing and within one term. `seq_len`/`pred_len` are in 5-min STEPS (7d=2016, 3d=864, 1d=288).
 - Do NOT cross-import `preprocessing/term_split.py`; keep the framework self-contained.
-- After each task, append a dated line to `docs/sw-framework-v002/dataloader-split-design.md` §8 progress log.
+- After each task, append a dated line to `docs/dataloader-split-design.md` §8 progress log.
 - Commit messages end with: `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`
 
 ---
@@ -128,7 +128,7 @@ import numpy as np
 import pandas as pd
 from data.loader import _read_table, _valid_starts
 
-PROC = "/NAS/ioGuard3/vol3/spaceai/SW_framework/data/goes_data/processed"
+PROC = "data/goes_data/processed"
 PARTICLE = os.path.join(PROC, "kasi_swpc_particle_5m_v02.parquet")
 
 
@@ -607,7 +607,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 ### Task 7: Update docs progress log
 
 **Files:**
-- Modify: `docs/sw-framework-v002/dataloader-split-design.md` §8
+- Modify: `docs/dataloader-split-design.md` §8
 
 - [ ] **Step 1: Append progress entries**
 
@@ -623,7 +623,7 @@ Add under §8, one line per completed task, e.g.:
 
 - [ ] **Step 2: Verify the design doc reads cleanly**
 
-Run: `sed -n '/## 8/,$p' docs/sw-framework-v002/dataloader-split-design.md`
+Run: `sed -n '/## 8/,$p' docs/dataloader-split-design.md`
 Expected: progress entries present, no placeholders.
 
 ---

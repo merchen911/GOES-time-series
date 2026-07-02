@@ -16,7 +16,7 @@ The univariate loader consumes one parquet channel of the `primary` series. For
 multivariate forecasting we need several channels that live in **separate
 parquet files at different native cadences** (particle 5-min, xray 1-min),
 aligned onto one regular grid. The join and gap rule were prototyped and
-validated in `workdir/preprocessing/count_fold_samples.py::load_validity`; this
+validated in `preprocessing/count_fold_samples.py::load_validity`; this
 spec moves that logic into the training `DataModule` with one refinement:
 **5-min mean resampling** instead of exact-mark sampling.
 

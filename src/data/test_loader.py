@@ -6,7 +6,9 @@ from data.loader import _read_table, _valid_starts, _term_labels, _prepare_serie
 from types import SimpleNamespace as _NS
 from data.loader import _parse_channels, _resolve_channels
 
-PROC = "/NAS/ioGuard3/vol3/spaceai/SW_framework/data/goes_data/processed"
+# Real-data tests are skipUnless the parquet exists; point SW_DATA_DIR at the
+# processed-parquet dir (data is shared separately, not in the repo).
+PROC = os.environ.get("SW_DATA_DIR", "data/goes_data/processed")
 PARTICLE = os.path.join(PROC, "kasi_swpc_particle_5m_v02.parquet")
 
 
