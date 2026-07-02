@@ -62,9 +62,16 @@ GOES proton/xray 예보를 위해 **parquet 다변량 입력**, **반기(year_ha
 - `src/exp/exp.py`: 멀티 모델 실험 및 성능 비교
 
 ## 설계 문서
-프로젝트 `docs/sw-framework-v002/`에 위치합니다:
+저장소 내 `docs/`에 위치합니다:
 - `dataloader-split-{design,plan}.md` — 반기 분할 + parquet DataModule
 - `multivar-join-{design,plan}.md` — 다변량 공통격자 조인, 가변 길이·다중 타깃(§9)
+- `model-extensibility-design.md` — 모델 확장성(백본/손실/지표 레지스트리) 설계
+
+## 전처리 스크립트
+저장소 내 `preprocessing/`:
+- `term_split.py` — 반기 term 태깅 + 순환 k-fold 분할
+- `count_fold_samples.py` — 폴드별 학습 가능 윈도우 수 집계
+- `make_latex_tables.py` — 논문용 결과 표(LaTeX) 생성
 
 ## 결과물
 - `runs/<run_name>/ckpt/<model>.pt`
