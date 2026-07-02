@@ -8,11 +8,12 @@ from torch import nn
 class StandardForecastAdapter(nn.Module):
     """표준 모델(legacy-style 4-argument forward) 어댑터."""
 
-    def __init__(self, base_model: nn.Module, config, target_index: int) -> None:
+    def __init__(self, base_model: nn.Module, config, target_indices) -> None:
         super().__init__()
         self.base_model = base_model
         self.config = config
-        self.target_index = target_index
+        # list of channel indices to forecast (>=1); supports multi-target output
+        self.target_indices = list(target_indices)
 
     @staticmethod
     def _build_time_mark(batch: int, length: int, device) -> "torch.Tensor":
@@ -30,12 +31,14 @@ class StandardForecastAdapter(nn.Module):
         x_mark_dec = self._build_time_mark(b, self.config.label_len + self.config.pred_len, dev)
 
         pred = self.base_model(x, x_mark_enc, x_dec, x_mark_dec)
+        # base model emits all enc_in channels; select the target channel(s).
+        # -> [B, pred_len, len(target_indices)] to match y = (B, pred_len, T).
         if pred.ndim == 3 and pred.shape[-1] > 1:
-            pred = pred[..., self.target_index : self.target_index + 1]
+            pred = pred[..., self.target_indices]
         return pred
 
 
-def build_model(model_name: str, config, input_size: int, target_index: int):
+def build_model(model_name: str, config, input_size: int, target_indices):
     # legacy-style configs
     config.model = model_name
     config.enc_in = input_size
@@ -44,4 +47,5 @@ def build_model(model_name: str, config, input_size: int, target_index: int):
 
     module = importlib.import_module(f"{__name__}.{model_name}")
     base_model = getattr(module, "Model")(config)
-    return StandardForecastAdapter(base_model=base_model, config=config, target_index=target_index)
+    return StandardForecastAdapter(base_model=base_model, config=config,
+                                   target_indices=target_indices)
