@@ -65,6 +65,12 @@ def exp_parser() -> argparse.ArgumentParser:
     parser.add_argument("--num_kernels", type=int, default=6)
     parser.add_argument("--num_class", type=int, default=1)
 
+    # modeling: pluggable loss / metrics
+    parser.add_argument("--loss", type=str, default="mse")
+    parser.add_argument("--metrics", nargs="+", default=["mse", "mae"])
+    parser.add_argument("--event_threshold", nargs="*", type=float, default=None)
+    parser.add_argument("--sort_metric", type=str, default="best_val_loss")
+
     return parser
 
 
@@ -84,4 +90,22 @@ def config_postprocess(config):
     if (config.split_type in {"year", "year_half"} and not config.time_col
             and not str(config.data_path).endswith(".parquet")):
         raise ValueError("time-based k-fold requires --time_col.")
+
+    from exp.metrics import METRIC_REGISTRY
+    for m in config.metrics:
+        if m not in METRIC_REGISTRY:
+            raise ValueError(
+                f"unknown metric '{m}'; registered: {sorted(METRIC_REGISTRY)}")
+    event = [m for m in config.metrics
+             if METRIC_REGISTRY[m].kind == "event"]
+    if event:
+        n_targets = (len(config.target_cols)
+                     if getattr(config, "target_cols", None) else 1)
+        if not config.event_threshold:
+            raise ValueError(f"event metrics {event} require --event_threshold")
+        if len(config.event_threshold) != n_targets:
+            raise ValueError(
+                f"--event_threshold length {len(config.event_threshold)} "
+                f"!= number of targets {n_targets}")
+
     return config
