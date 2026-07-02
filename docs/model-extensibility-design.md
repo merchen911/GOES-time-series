@@ -20,7 +20,7 @@ extension along the two axes the user prioritized:
 **Out of scope (YAGNI):** new task heads (e.g. classification), input
 embeddings / real time-features (time-marks stay zero), config-file/Hydra
 systems, per-channel distinct transforms, missing-value options 2/3 (Option 1
-is fixed — see `docs/sw-framework-v002/`).
+is fixed — see `docs/`).
 
 ## 2. Chosen approach
 

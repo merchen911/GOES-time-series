@@ -18,8 +18,14 @@ GOES proton/xray 예보를 위해 **parquet 다변량 입력**, **반기(year_ha
 
 ## 빠른 시작
 환경 준비 후(`pip install -r requirements.txt`, netCDF/parquet 라이브러리는 `python3.12` 환경)
-루트의 `main.py`로 실행합니다. 다운로드된 데이터는 프로젝트 `data/` 폴더에 있습니다:
-`PROC=<...>/SW_framework/data/goes_data/processed`
+루트의 `main.py`로 실행합니다.
+
+**데이터는 이 저장소에 포함되지 않습니다**(별도 공유). 내려받은 뒤 처리된 parquet 디렉터리를
+환경변수로 지정하세요. 실데이터 테스트/전처리 스크립트는 이 변수를 참조합니다:
+```
+export SW_DATA_DIR=/path/to/data/goes_data/processed
+PROC=$SW_DATA_DIR
+```
 
 - **CSV (레거시)**
   `python main.py --data_path /path/to/data.csv --target_col target --models lstm timesnet`

@@ -30,7 +30,7 @@ and produce gap-free sliding windows for one target channel of the
 | D4 | Target transform is config-selectable: `--transform {none,log10}`, **default `log10`** (normalization left to model RevIN/StandardNorm). |
 | D5 | Window rule = **option 1** (legacy `nonvalue2nan`): the whole `L=seq_len+pred_len` window must be non-missing, within one term. |
 | D6 | Reuse the loader's own `_add_term_column`/`_fold_indices` (identical math to `preprocessing/term_split.py`); **no cross-repo import** → framework stays self-contained. |
-| D7 | Docs in `docs/sw-framework-v002/` are updated continuously (this file's §8 log). |
+| D7 | Docs in `docs/` are updated continuously (this file's §8 log). |
 
 ## 3. Architecture
 
