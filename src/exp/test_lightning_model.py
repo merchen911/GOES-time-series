@@ -24,7 +24,7 @@ class _ConstModel(torch.nn.Module):
 
     def forward(self, x):
         b = x.shape[0]
-        return torch.zeros(b, self.pred_len, self.t) + self.p
+        return torch.zeros(b, self.pred_len, self.t, device=self.p.device) + self.p
 
 
 class TestPlModelMetrics(unittest.TestCase):
