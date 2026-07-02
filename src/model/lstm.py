@@ -12,17 +12,21 @@ class Model(nn.Module):
         super(Model, self).__init__()
 
         self.configs = configs
+        self.pred_len = configs.pred_len
+        self.enc_in = configs.enc_in
         self.lstm = torch.nn.LSTM(
             input_size = configs.enc_in,
-            hidden_size = configs.d_model, 
+            hidden_size = configs.d_model,
             num_layers = configs.num_layers,
             dropout = configs.dropout,
             batch_first = True,
         )
-        
+
+        # Direct multi-horizon head: last hidden state -> pred_len * enc_in,
+        # reshaped to [B, pred_len, enc_in]. Honors any pred_len (5-min steps).
         self.projection = nn.Sequential(
             nn.Dropout(configs.dropout),
-            nn.Linear(configs.d_model, configs.enc_in)
+            nn.Linear(configs.d_model, configs.pred_len * configs.enc_in)
         )
         
         
@@ -41,7 +45,8 @@ class Model(nn.Module):
         # x_enc /= stdev
 
         o, _ = self.lstm(x_enc)
-        dec_out = self.projection(o[:,-1:])
+        dec_out = self.projection(o[:, -1])                 # [B, pred_len*enc_in]
+        dec_out = dec_out.reshape(-1, self.pred_len, self.enc_in)  # [B, pred_len, enc_in]
         
         # De-Normalization from Non-stationary Transformer
         # dec_out = dec_out * \

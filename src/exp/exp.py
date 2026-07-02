@@ -46,7 +46,7 @@ def run_experiment(config):
             model_name=model_name,
             config=config,
             input_size=data_bundle.input_size,
-            target_index=data_bundle.target_index,
+            target_indices=data_bundle.target_indices,
         )
         runner = pl_model(model, config)
 
