@@ -306,3 +306,12 @@ class TestSetupMultivar(unittest.TestCase):
         xb, yb = next(iter(b.train_loader))
         self.assertEqual(tuple(xb.shape[1:]), (288, 2))
         self.assertEqual(tuple(yb.shape[1:]), (12, 2))
+        self.assertEqual(b.target_cols, ["p_gt10", "xrs_long"])
+
+
+class TestDataBundleTargetCols(unittest.TestCase):
+    def test_target_cols_default_empty(self):
+        from data.loader import DataBundle
+        b = DataBundle(train_loader=None, val_loader=None, test_loader=None,
+                       input_size=1, target_index=0)
+        self.assertEqual(b.target_cols, [])

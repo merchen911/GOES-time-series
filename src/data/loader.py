@@ -160,6 +160,7 @@ class DataBundle:
     target_index: int
     output_size: int = 1
     target_indices: List[int] = field(default_factory=list)
+    target_cols: List[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         # keep target_indices authoritative; default to [target_index]
@@ -356,4 +357,4 @@ class DataModule:
             train_loader=loaders["train"], val_loader=loaders["val"],
             test_loader=loaders["test"], input_size=len(cols),
             target_index=target_idx[0], output_size=len(target_cols),
-            target_indices=target_idx)
+            target_indices=target_idx, target_cols=target_cols)
