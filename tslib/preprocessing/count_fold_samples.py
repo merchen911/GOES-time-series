@@ -24,7 +24,7 @@ import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
 
-import term_split as ts
+from tslib.preprocessing import term_split as ts
 
 STEP = pd.Timedelta("5min")
 DAY = 24 * 12  # 288 five-minute steps per day

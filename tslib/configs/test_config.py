@@ -1,5 +1,5 @@
 import unittest
-from configs.config import exp_parser, config_postprocess
+from tslib.configs.config import exp_parser, config_postprocess
 
 
 class TestConfig(unittest.TestCase):

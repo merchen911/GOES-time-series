@@ -22,8 +22,18 @@ and flare-related quantities.
 
 ## Installation
 
+The code lives in the importable `tslib` package. Install it editable so
+`import tslib` works from any notebook or script:
+
 ```bash
-pip install -r requirements.txt   # Python 3.12 recommended (netCDF/parquet libs)
+pip install -e .        # Python 3.12 recommended (netCDF/parquet libs)
+```
+
+Then, e.g. in a notebook under `notebook/`:
+
+```python
+from tslib.data.loader import DataModule
+from tslib.model import build_model
 ```
 
 ## Quick start
@@ -80,12 +90,25 @@ python main.py --channels $SW_DATA_DIR/...:p_gt10 $SW_DATA_DIR/...:xrs_long \
 
 ## Repository layout
 
-- `src/configs/` — CLI / experiment configuration
-- `src/data/` — loading, windowing, splitting, common-grid channel join
-- `src/model/` — model sources + `build_model` / forecast adapter (target selection)
-- `src/exp/` — training loop and multi-model comparison
-- `preprocessing/` — term-split, fold-sample counting, table generation
-- `docs/` — design documents (data pipeline, multivariate join, model extensibility)
+```
+.
+├── tslib/            # the importable package (pip install -e .)
+│   ├── configs/      # CLI / experiment configuration
+│   ├── data/         # loading, windowing, splitting, common-grid channel join
+│   ├── model/        # model sources + build_model / forecast adapter
+│   ├── exp/          # training loop and multi-model comparison
+│   └── preprocessing/# term-split, fold-sample counting, table generation
+├── notebook/         # exploratory / analysis notebooks (import tslib)
+├── docs/             # design documents
+└── main.py           # CLI entry point (imports tslib)
+```
+
+## Testing
+
+```bash
+python -m unittest discover -t . -s tslib -p 'test_*.py'   # from repo root
+```
+Real-data tests are skipped unless `SW_DATA_DIR` is set.
 
 ## Design documents
 

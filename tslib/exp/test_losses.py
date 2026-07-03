@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import torch
 
-from exp.losses import LOSS_REGISTRY, build_loss
+from tslib.exp.losses import LOSS_REGISTRY, build_loss
 
 
 class TestLosses(unittest.TestCase):

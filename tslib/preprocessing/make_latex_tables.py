@@ -10,8 +10,8 @@ import os
 import numpy as np
 import pandas as pd
 
-import count_fold_samples as cfs
-import term_split as ts
+from tslib.preprocessing import count_fold_samples as cfs
+from tslib.preprocessing import term_split as ts
 
 DAY = cfs.DAY
 OUT = os.environ.get("SW_TABLES_OUT", "fold_sample_tables.tex")

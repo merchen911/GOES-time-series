@@ -30,7 +30,7 @@ _LEGACY = ["lstm", "timesnet", "patchtst", "itransformer", "micn",
 
 
 def _legacy_ctor(name):
-    return lambda cfg, _n=name: importlib.import_module(f"model.{_n}").Model(cfg)
+    return lambda cfg, _n=name: importlib.import_module(f"tslib.model.{_n}").Model(cfg)
 
 
 for _n in _LEGACY:

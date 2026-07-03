@@ -4,8 +4,8 @@ from types import SimpleNamespace
 import numpy as np
 import torch
 
-from exp.lightning_model import pl_model
-from exp.metrics import MetricContext
+from tslib.exp.lightning_model import pl_model
+from tslib.exp.metrics import MetricContext
 
 
 def _cfg(**kw):

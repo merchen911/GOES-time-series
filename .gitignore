@@ -8,6 +8,11 @@ ckpt/
 *.pt
 .env
 
+# Editable-install / build artifacts
+*.egg-info/
+build/
+dist/
+
 # Data is shared separately — never commit datasets or their derivatives
 *.parquet
 *.csv

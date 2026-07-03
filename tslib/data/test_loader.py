@@ -2,9 +2,9 @@ import os, tempfile, unittest
 import numpy as np
 import pandas as pd
 import torch
-from data.loader import _read_table, _valid_starts, _term_labels, _prepare_series, _grid_and_starts, WindowDataset
+from tslib.data.loader import _read_table, _valid_starts, _term_labels, _prepare_series, _grid_and_starts, WindowDataset
 from types import SimpleNamespace as _NS
-from data.loader import _parse_channels, _resolve_channels
+from tslib.data.loader import _parse_channels, _resolve_channels
 
 # Real-data tests are skipUnless the parquet exists; point SW_DATA_DIR at the
 # processed-parquet dir (data is shared separately, not in the repo).
@@ -109,7 +109,7 @@ class TestWindowDataset(unittest.TestCase):
 
 
 from types import SimpleNamespace
-from data.loader import DataModule
+from tslib.data.loader import DataModule
 
 
 def _cfg(**kw):
@@ -138,7 +138,7 @@ class TestSetupParquet(unittest.TestCase):
         self.assertEqual(tuple(yb.shape[1:]), (12, 1))
 
     def test_leakage_free_terms(self):
-        from data.loader import _read_table, _prepare_series, _term_labels, _fold_indices
+        from tslib.data.loader import _read_table, _prepare_series, _term_labels, _fold_indices
         c = _cfg()
         s = _prepare_series(_read_table(c.data_path, [ "time_utc", "role", c.target_col]),
                             "time_utc", c.target_col, c.role, c.transform)
@@ -202,19 +202,19 @@ class TestWindowDatasetMV(unittest.TestCase):
 
 class TestDataBundleOutputSize(unittest.TestCase):
     def test_default_output_size(self):
-        from data.loader import DataBundle
+        from tslib.data.loader import DataBundle
         b = DataBundle(train_loader=None, val_loader=None, test_loader=None,
                        input_size=2, target_index=0)
         self.assertEqual(b.output_size, 1)
 
     def test_target_indices_defaults_to_single(self):
-        from data.loader import DataBundle
+        from tslib.data.loader import DataBundle
         b = DataBundle(train_loader=None, val_loader=None, test_loader=None,
                        input_size=3, target_index=2)
         self.assertEqual(b.target_indices, [2])  # backward compat: [target_index]
 
     def test_target_indices_explicit_multi(self):
-        from data.loader import DataBundle
+        from tslib.data.loader import DataBundle
         b = DataBundle(train_loader=None, val_loader=None, test_loader=None,
                        input_size=3, target_index=0, output_size=2,
                        target_indices=[0, 2])
@@ -311,7 +311,7 @@ class TestSetupMultivar(unittest.TestCase):
 
 class TestDataBundleTargetCols(unittest.TestCase):
     def test_target_cols_default_empty(self):
-        from data.loader import DataBundle
+        from tslib.data.loader import DataBundle
         b = DataBundle(train_loader=None, val_loader=None, test_loader=None,
                        input_size=1, target_index=0)
         self.assertEqual(b.target_cols, [])

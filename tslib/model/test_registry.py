@@ -3,8 +3,8 @@ from types import SimpleNamespace
 
 import torch
 
-from model.registry import MODEL_REGISTRY, register_model
-from model import build_model
+from tslib.model.registry import MODEL_REGISTRY, register_model
+from tslib.model import build_model
 
 
 class TestModelRegistry(unittest.TestCase):

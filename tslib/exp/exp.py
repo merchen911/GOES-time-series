@@ -7,8 +7,8 @@ import numpy as np
 import pandas as pd
 import torch
 
-from data.loader import DataModule
-from model import build_model
+from tslib.data.loader import DataModule
+from tslib.model import build_model
 from .lightning_model import pl_model, TrainResult
 
 
