@@ -91,7 +91,7 @@ def config_postprocess(config):
             and not str(config.data_path).endswith(".parquet")):
         raise ValueError("time-based k-fold requires --time_col.")
 
-    from exp.metrics import METRIC_REGISTRY
+    from tslib.exp.metrics import METRIC_REGISTRY
     for m in config.metrics:
         if m not in METRIC_REGISTRY:
             raise ValueError(

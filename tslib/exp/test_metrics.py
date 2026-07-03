@@ -2,7 +2,7 @@ import unittest
 
 import numpy as np
 
-from exp.metrics import METRIC_REGISTRY, MetricContext
+from tslib.exp.metrics import METRIC_REGISTRY, MetricContext
 
 
 class TestRegressionMetrics(unittest.TestCase):

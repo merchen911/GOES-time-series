@@ -39,7 +39,7 @@ class StandardForecastAdapter(nn.Module):
 
 
 def build_model(model_name: str, config, input_size: int, target_indices):
-    from model.registry import MODEL_REGISTRY
+    from tslib.model.registry import MODEL_REGISTRY
     if model_name not in MODEL_REGISTRY:
         raise ValueError(
             f"unknown model '{model_name}'; registered: {sorted(MODEL_REGISTRY)}")

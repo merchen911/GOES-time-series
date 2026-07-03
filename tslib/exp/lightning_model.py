@@ -7,8 +7,8 @@ import numpy as np
 import torch
 from torch import nn
 
-from exp.losses import build_loss
-from exp.metrics import METRIC_REGISTRY, MetricContext
+from tslib.exp.losses import build_loss
+from tslib.exp.metrics import METRIC_REGISTRY, MetricContext
 
 
 @dataclass

@@ -4,7 +4,7 @@ import unittest
 import numpy as np
 import pandas as pd
 
-import term_split as ts
+from tslib.preprocessing import term_split as ts
 
 
 def _toy(start="1998-01-01", periods=57 * 100, freq="3D"):

@@ -1,7 +1,7 @@
 import unittest
 
-from exp.exp import build_comparison
-from exp.lightning_model import TrainResult
+from tslib.exp.exp import build_comparison
+from tslib.exp.lightning_model import TrainResult
 
 
 class TestBuildComparison(unittest.TestCase):

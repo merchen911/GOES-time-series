@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import torch
 
-from model import build_model
+from tslib.model import build_model
 
 
 def _cfg(seq_len, pred_len):
