@@ -39,13 +39,18 @@ class StandardForecastAdapter(nn.Module):
 
 
 def build_model(model_name: str, config, input_size: int, target_indices):
+    from model.registry import MODEL_REGISTRY
+    if model_name not in MODEL_REGISTRY:
+        raise ValueError(
+            f"unknown model '{model_name}'; registered: {sorted(MODEL_REGISTRY)}")
+    spec = MODEL_REGISTRY[model_name]
     # legacy-style configs
     config.model = model_name
     config.enc_in = input_size
     config.dec_in = input_size
     config.c_out = input_size
-
-    module = importlib.import_module(f"{__name__}.{model_name}")
-    base_model = getattr(module, "Model")(config)
-    return StandardForecastAdapter(base_model=base_model, config=config,
-                                   target_indices=target_indices)
+    base_model = spec.ctor(config)
+    if spec.adapter == "standard":
+        return StandardForecastAdapter(base_model=base_model, config=config,
+                                       target_indices=target_indices)
+    raise ValueError(f"unknown adapter '{spec.adapter}'")

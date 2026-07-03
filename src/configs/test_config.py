@@ -45,3 +45,35 @@ class TestMultivarFlags(unittest.TestCase):
         self.assertEqual(c.channels, ["a.parquet:p_gt10", "b.parquet:xrs_long"])
         self.assertEqual(c.target_cols, ["p_gt10"])
         self.assertEqual(c.min_bin_count, 3)
+
+
+def _parse(*extra):
+    argv = ["--data_path", "x.parquet", "--target_col", "p_gt10", *extra]
+    return config_postprocess(exp_parser().parse_args(argv))
+
+
+class TestModelingFlags(unittest.TestCase):
+    def test_defaults(self):
+        c = _parse()
+        self.assertEqual(c.loss, "mse")
+        self.assertEqual(c.metrics, ["mse", "mae"])
+        self.assertEqual(c.sort_metric, "best_val_loss")
+
+    def test_unknown_metric_errors(self):
+        with self.assertRaises(ValueError):
+            _parse("--metrics", "mse", "bogus")
+
+    def test_event_metric_requires_threshold(self):
+        with self.assertRaises(ValueError):
+            _parse("--metrics", "tss")
+
+    def test_event_threshold_length_must_match_targets(self):
+        # two targets but one threshold -> error
+        with self.assertRaises(ValueError):
+            _parse("--channels", "a.parquet:p_gt10", "b.parquet:xrs_long",
+                   "--target_cols", "p_gt10", "xrs_long",
+                   "--metrics", "tss", "--event_threshold", "10")
+
+    def test_event_metric_ok_with_matching_threshold(self):
+        c = _parse("--metrics", "mse", "tss", "--event_threshold", "10")
+        self.assertEqual(c.event_threshold, [10.0])

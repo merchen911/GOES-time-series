@@ -7,13 +7,15 @@ import numpy as np
 import torch
 from torch import nn
 
+from exp.losses import build_loss
+from exp.metrics import METRIC_REGISTRY, MetricContext
+
 
 @dataclass
 class TrainResult:
     model_name: str
     best_val_loss: float
-    test_mse: float
-    test_mae: float
+    metrics: Dict[str, float]
     ckpt_path: str
 
 
@@ -28,7 +30,7 @@ class pl_model:
         self.config = config
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.model = self.model.to(self.device)
-        self.criterion = nn.MSELoss()
+        self.criterion = build_loss(config)
         self.optimizer = torch.optim.Adam(
             self.model.parameters(), lr=self.config.lr, weight_decay=self.config.weight_decay
         )
@@ -49,19 +51,24 @@ class pl_model:
         return float(np.mean(losses)) if losses else float("inf")
 
     @torch.no_grad()
-    def evaluate(self, loader) -> Dict[str, float]:
+    def evaluate(self, loader, ctx) -> Dict[str, float]:
         self.model.eval()
         all_pred, all_true = [], []
         for x, y in loader:
             pred = self.model(x.to(self.device)).cpu().numpy()
             all_pred.append(pred)
-            all_true.append(y.numpy())
+            all_true.append(np.asarray(y))
         pred = np.concatenate(all_pred, axis=0)
         true = np.concatenate(all_true, axis=0)
-        return {
-            "mse": float(np.mean((pred - true) ** 2)),
-            "mae": float(np.mean(np.abs(pred - true))),
-        }
+        out: Dict[str, float] = {}
+        for name in self.config.metrics:
+            val = METRIC_REGISTRY[name].fn(pred, true, ctx)
+            if isinstance(val, dict):
+                for ch, v in val.items():
+                    out[f"{name}_{ch}"] = float(v)
+            else:
+                out[name] = float(val)
+        return out
 
     def fit_and_test(self, datamodule, model_name: str, ckpt_path: str) -> TrainResult:
         best_val = float("inf")
@@ -73,11 +80,14 @@ class pl_model:
                 torch.save(self.model.state_dict(), ckpt_path)
 
         self.model.load_state_dict(torch.load(ckpt_path, map_location=self.device))
-        metrics = self.evaluate(datamodule.test_loader)
+        ctx = MetricContext(
+            thresholds=getattr(self.config, "event_threshold", None),
+            transform=getattr(self.config, "transform", "none"),
+            target_cols=list(getattr(datamodule, "target_cols", []) or []))
+        metrics = self.evaluate(datamodule.test_loader, ctx)
         return TrainResult(
             model_name=model_name,
             best_val_loss=best_val,
-            test_mse=metrics["mse"],
-            test_mae=metrics["mae"],
+            metrics=metrics,
             ckpt_path=ckpt_path,
         )
