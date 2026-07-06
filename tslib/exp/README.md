@@ -38,3 +38,19 @@ aligned to `--target_cols`. Results become dynamic columns in the comparison
 table (`build_comparison`), event metrics as `myscore_<channel>`.
 
 See `losses.py`, `metrics.py`, and their tests for reference.
+
+## Forecast strategies (`strategy.py`, `--forecast_strategy`)
+
+`--forecast_strategy` selects how the model generates predictions across the
+forecast horizon:
+
+- `direct` (default) — model emits full `pred_len` in one forward pass.
+- `recursive` — train a one-step model, roll out at inference; requires
+  forecasting all input channels.
+- `statistic` — classical statsmodels (ARIMA/AR/Theta), per-window fit,
+  univariate only.
+
+`run_strategy` (in `strategy.py`) dispatches the chosen strategy. To compare
+families of runs across strategies (e.g., direct vs. recursive), use
+`merge_comparisons(frames, sort_metric)` in `exp.py` — it combines comparison
+tables into one, adding a `strategy` column.
