@@ -43,6 +43,13 @@ def exp_parser() -> argparse.ArgumentParser:
 
     # model comparison
     parser.add_argument("--models", nargs="+", default=["lstm", "timesnet"])
+    parser.add_argument("--forecast_strategy", type=str, default="direct",
+                        choices=["direct", "recursive", "statistic"],
+                        help="how the forecast horizon is produced")
+    parser.add_argument("--arima_order", nargs=3, type=int, default=[1, 0, 0],
+                        help="ARIMA (p,d,q) for statistic strategy")
+    parser.add_argument("--ar_lags", type=int, default=1,
+                        help="AR lag count for statistic strategy")
     parser.add_argument("--hidden_size", type=int, default=64)
 
     # 표준 모델 공통 기본값
@@ -107,5 +114,32 @@ def config_postprocess(config):
             raise ValueError(
                 f"--event_threshold length {len(config.event_threshold)} "
                 f"!= number of targets {n_targets}")
+
+    strategy = getattr(config, "forecast_strategy", "direct")
+    if strategy in ("direct", "recursive"):
+        from tslib.model.registry import MODEL_REGISTRY
+        for m in config.models:
+            if m not in MODEL_REGISTRY:
+                raise ValueError(
+                    f"unknown model '{m}' for strategy '{strategy}'; "
+                    f"registered: {sorted(MODEL_REGISTRY)}")
+    if strategy == "recursive":
+        n_ch = len(config.channels) if getattr(config, "channels", None) else 1
+        n_tgt = len(config.target_cols) if getattr(config, "target_cols", None) else 1
+        if n_tgt != n_ch:
+            raise ValueError(
+                "recursive strategy must forecast all input channels: "
+                f"target count {n_tgt} != channel count {n_ch}")
+    if strategy == "statistic":
+        from tslib.model.statistical import STAT_REGISTRY
+        for m in config.models:
+            if m not in STAT_REGISTRY:
+                raise ValueError(
+                    f"unknown statistical model '{m}'; "
+                    f"registered: {sorted(STAT_REGISTRY)}")
+        n_tgt = len(config.target_cols) if getattr(config, "target_cols", None) else 1
+        if n_tgt != 1:
+            raise ValueError(
+                f"statistic strategy is univariate; got {n_tgt} targets")
 
     return config

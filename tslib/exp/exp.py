@@ -8,16 +8,22 @@ import pandas as pd
 import torch
 
 from tslib.data.loader import DataModule
-from tslib.model import build_model
-from .lightning_model import pl_model, TrainResult
+from .strategy import run_strategy
 
 
 def build_comparison(results, sort_metric):
-    rows = [{"model": r.model_name, "best_val_loss": r.best_val_loss, **r.metrics}
+    rows = [{"strategy": r.strategy, "model": r.model_name,
+             "best_val_loss": r.best_val_loss, **r.metrics}
             for r in results]
     df = pd.DataFrame(rows)
     key = sort_metric if sort_metric in df.columns else "best_val_loss"
-    return df.sort_values(by=key).reset_index(drop=True)
+    return df.sort_values(by=key, na_position="last").reset_index(drop=True)
+
+
+def merge_comparisons(frames, sort_metric="best_val_loss"):
+    df = pd.concat(list(frames), ignore_index=True)
+    key = sort_metric if sort_metric in df.columns else "best_val_loss"
+    return df.sort_values(by=key, na_position="last").reset_index(drop=True)
 
 
 def _set_seed(seed: int) -> None:
@@ -48,18 +54,12 @@ def run_experiment(config):
     data_module = DataModule(config)
     data_bundle = data_module.setup()
 
+    strategy = getattr(config, "forecast_strategy", "direct")
     results = []
     for model_name in config.models:
-        model = build_model(
-            model_name=model_name,
-            config=config,
-            input_size=data_bundle.input_size,
-            target_indices=data_bundle.target_indices,
-        )
-        runner = pl_model(model, config)
         ckpt_path = os.path.join(dirs["ckpt"], f"{model_name}.pt")
-        results.append(runner.fit_and_test(data_bundle, model_name=model_name,
-                                           ckpt_path=ckpt_path))
+        results.append(run_strategy(strategy, model_name, data_bundle,
+                                    config, ckpt_path))
 
     comparison = build_comparison(results, config.sort_metric)
     comparison_path = os.path.join(dirs["score"], "comparison.csv")

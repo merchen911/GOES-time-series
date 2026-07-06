@@ -8,7 +8,7 @@ import torch
 from torch import nn
 
 from tslib.exp.losses import build_loss
-from tslib.exp.metrics import METRIC_REGISTRY, MetricContext
+from tslib.exp.metrics import MetricContext
 
 
 @dataclass
@@ -17,6 +17,7 @@ class TrainResult:
     best_val_loss: float
     metrics: Dict[str, float]
     ckpt_path: str
+    strategy: str = "direct"
 
 
 class pl_model:
@@ -42,7 +43,7 @@ class pl_model:
             x = x.to(self.device)
             y = y.to(self.device)
             pred = self.model(x)
-            loss = self.criterion(pred, y)
+            loss = self.criterion(pred, y[:, :pred.shape[1], :])
             if train:
                 self.optimizer.zero_grad()
                 loss.backward()
@@ -60,15 +61,8 @@ class pl_model:
             all_true.append(np.asarray(y))
         pred = np.concatenate(all_pred, axis=0)
         true = np.concatenate(all_true, axis=0)
-        out: Dict[str, float] = {}
-        for name in self.config.metrics:
-            val = METRIC_REGISTRY[name].fn(pred, true, ctx)
-            if isinstance(val, dict):
-                for ch, v in val.items():
-                    out[f"{name}_{ch}"] = float(v)
-            else:
-                out[name] = float(val)
-        return out
+        from tslib.exp.metrics import run_metrics
+        return run_metrics(pred, true, ctx, self.config.metrics)
 
     def fit_and_test(self, datamodule, model_name: str, ckpt_path: str) -> TrainResult:
         best_val = float("inf")

@@ -104,3 +104,15 @@ register_metric("tss", "event")(_event_metric(_tss))
 register_metric("hss", "event")(_event_metric(_hss))
 register_metric("pod", "event")(_event_metric(_pod))
 register_metric("far", "event")(_event_metric(_far))
+
+
+def run_metrics(pred, true, ctx, metric_names):
+    out = {}
+    for name in metric_names:
+        val = METRIC_REGISTRY[name].fn(pred, true, ctx)
+        if isinstance(val, dict):
+            for ch, v in val.items():
+                out[f"{name}_{ch}"] = float(v)
+        else:
+            out[name] = float(val)
+    return out
