@@ -113,3 +113,30 @@ class TestForecastStrategy(unittest.TestCase):
         c = self._parse("--models", "not_a_model")
         with self.assertRaises(ValueError):
             config_postprocess(c)
+
+
+class TestStatisticStrategyConfig(unittest.TestCase):
+    def _parse(self, *extra):
+        argv = ["--data_path", "x.parquet", "--target_col", "p_gt10", *extra]
+        return exp_parser().parse_args(argv)
+
+    def test_arima_order_and_ar_lags_defaults(self):
+        c = self._parse()
+        self.assertEqual(c.arima_order, [1, 0, 0])
+        self.assertEqual(c.ar_lags, 1)
+
+    def test_statistic_ok(self):
+        c = self._parse("--forecast_strategy", "statistic", "--models", "arima")
+        self.assertIs(config_postprocess(c), c)
+
+    def test_statistic_neural_model_rejected(self):
+        c = self._parse("--forecast_strategy", "statistic", "--models", "lstm")
+        with self.assertRaises(ValueError):
+            config_postprocess(c)
+
+    def test_statistic_multivariate_rejected(self):
+        c = self._parse("--forecast_strategy", "statistic", "--models", "arima",
+                        "--channels", "a.parquet:x", "b.parquet:y",
+                        "--target_cols", "x", "y")
+        with self.assertRaises(ValueError):
+            config_postprocess(c)
