@@ -53,3 +53,16 @@ class TestEventMetrics(unittest.TestCase):
         pred = np.zeros((2, 1, 1)); true = np.zeros((2, 1, 1))
         with self.assertRaises(ValueError):
             METRIC_REGISTRY["tss"].fn(pred, true, MetricContext())
+
+
+class TestRunMetrics(unittest.TestCase):
+    def test_flattens_regression_and_event(self):
+        import numpy as np
+        from tslib.exp.metrics import run_metrics, MetricContext
+        pred = np.zeros((4, 2, 1))
+        true = np.full((4, 2, 1), 2.0)
+        ctx = MetricContext(thresholds=[10.0], transform="log10",
+                            target_cols=["p_gt10"])
+        out = run_metrics(pred, true, ctx, ["mse", "tss"])
+        self.assertIn("mse", out)
+        self.assertIn("tss_p_gt10", out)
