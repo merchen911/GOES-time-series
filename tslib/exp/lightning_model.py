@@ -42,7 +42,7 @@ class pl_model:
             x = x.to(self.device)
             y = y.to(self.device)
             pred = self.model(x)
-            loss = self.criterion(pred, y)
+            loss = self.criterion(pred, y[:, :pred.shape[1], :])
             if train:
                 self.optimizer.zero_grad()
                 loss.backward()
