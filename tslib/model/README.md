@@ -38,3 +38,23 @@ new adapter kind alongside `StandardForecastAdapter` and register with
 
 See `registry.py`, `__init__.py`, and any existing model (e.g. `lstm.py`,
 `patchtst.py`) for reference.
+
+## Statistical models (`--forecast_strategy statistic`)
+
+Non-neural, per-window backbones live in `statistical.py` behind their own
+registry, separate from the neural `registry.py` above:
+
+```python
+from tslib.model.statistical import register_stat
+@register_stat("myarima")
+class MyModel:
+    def fit(self, history): ...      # returns self
+    def forecast(self, steps): ...   # returns an array of length `steps`
+```
+
+`STAT_REGISTRY` maps a name to the class; `StatisticalRunner`
+(`tslib/exp/strategy.py`) constructs it per test window, calls
+`fit(history).forecast(pred_len)`, and falls back to persistence
+(last observed value repeated) if the fit raises or returns a bad-shape /
+non-finite forecast. Built-ins: `arima`, `ar`, `theta` — all backed by
+`statsmodels`, an added dependency for this strategy.
