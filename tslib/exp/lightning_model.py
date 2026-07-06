@@ -17,6 +17,7 @@ class TrainResult:
     best_val_loss: float
     metrics: Dict[str, float]
     ckpt_path: str
+    strategy: str = "direct"
 
 
 class pl_model:
