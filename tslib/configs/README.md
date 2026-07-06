@@ -18,7 +18,9 @@ framework.
 
 Existing flags cover data (`--channels`, `--target_cols`, `--transform`,
 `--min_bin_count`), windows (`--seq_len`, `--pred_len`, `--cadence_min`), the
-split (`--split_type`, `--n_fold`, `--fold_numb`), and modeling (`--loss`,
-`--metrics`, `--event_threshold`, `--sort_metric`, `--models`).
+split (`--split_type`, `--n_fold`, `--fold_numb`), modeling (`--loss`,
+`--metrics`, `--event_threshold`, `--sort_metric`, `--models`), and strategy
+(`--forecast_strategy`; `--arima_order` and `--ar_lags` apply only to the
+`statistic` strategy).
 
 See `config.py` and `test_config.py` for the full list and validation examples.
