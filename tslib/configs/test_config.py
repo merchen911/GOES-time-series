@@ -77,3 +77,66 @@ class TestModelingFlags(unittest.TestCase):
     def test_event_metric_ok_with_matching_threshold(self):
         c = _parse("--metrics", "mse", "tss", "--event_threshold", "10")
         self.assertEqual(c.event_threshold, [10.0])
+
+
+class TestForecastStrategy(unittest.TestCase):
+    def _parse(self, *extra):
+        argv = ["--data_path", "x.parquet", "--target_col", "p_gt10", *extra]
+        return exp_parser().parse_args(argv)
+
+    def test_default_is_direct(self):
+        self.assertEqual(self._parse().forecast_strategy, "direct")
+
+    def test_choice_parses(self):
+        self.assertEqual(
+            self._parse("--forecast_strategy", "recursive").forecast_strategy,
+            "recursive")
+
+    def test_recursive_univariate_ok(self):
+        c = self._parse("--forecast_strategy", "recursive")  # 1 channel, 1 target
+        self.assertIs(config_postprocess(c), c)
+
+    def test_recursive_all_channels_ok(self):
+        c = self._parse("--forecast_strategy", "recursive",
+                        "--channels", "a.parquet:x", "b.parquet:y",
+                        "--target_cols", "x", "y")
+        self.assertIs(config_postprocess(c), c)
+
+    def test_recursive_partial_targets_rejected(self):
+        c = self._parse("--forecast_strategy", "recursive",
+                        "--channels", "a.parquet:x", "b.parquet:y",
+                        "--target_cols", "x")
+        with self.assertRaises(ValueError):
+            config_postprocess(c)
+
+    def test_unknown_neural_model_rejected(self):
+        c = self._parse("--models", "not_a_model")
+        with self.assertRaises(ValueError):
+            config_postprocess(c)
+
+
+class TestStatisticStrategyConfig(unittest.TestCase):
+    def _parse(self, *extra):
+        argv = ["--data_path", "x.parquet", "--target_col", "p_gt10", *extra]
+        return exp_parser().parse_args(argv)
+
+    def test_arima_order_and_ar_lags_defaults(self):
+        c = self._parse()
+        self.assertEqual(c.arima_order, [1, 0, 0])
+        self.assertEqual(c.ar_lags, 1)
+
+    def test_statistic_ok(self):
+        c = self._parse("--forecast_strategy", "statistic", "--models", "arima")
+        self.assertIs(config_postprocess(c), c)
+
+    def test_statistic_neural_model_rejected(self):
+        c = self._parse("--forecast_strategy", "statistic", "--models", "lstm")
+        with self.assertRaises(ValueError):
+            config_postprocess(c)
+
+    def test_statistic_multivariate_rejected(self):
+        c = self._parse("--forecast_strategy", "statistic", "--models", "arima",
+                        "--channels", "a.parquet:x", "b.parquet:y",
+                        "--target_cols", "x", "y")
+        with self.assertRaises(ValueError):
+            config_postprocess(c)

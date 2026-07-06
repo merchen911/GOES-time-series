@@ -40,3 +40,14 @@ class TestPlModelMetrics(unittest.TestCase):
         out = runner.evaluate(loader, ctx)
         self.assertIn("mse", out)            # regression scalar
         self.assertIn("tss_p_gt10", out)     # event, per-channel key
+
+
+class TestOneStepTargetAlignment(unittest.TestCase):
+    def test_one_step_pred_against_multistep_target(self):
+        # model emits (B,1,1); loader target is (B,pred_len=2,1). Training must
+        # align y to the first step and run without a shape error.
+        runner = pl_model(_ConstModel(1, 1), _cfg(pred_len=2, epochs=1))
+        x = torch.zeros(4, 4, 1)
+        y = torch.full((4, 2, 1), 2.0)
+        loss = runner._run_epoch([(x, y)], train=True)
+        self.assertTrue(np.isfinite(loss))
