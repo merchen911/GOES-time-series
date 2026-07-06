@@ -26,12 +26,16 @@ class StatisticalRunner:
             return np.full(steps, history[-1], dtype=float)  # persistence
 
     def fit_and_test(self, data_bundle, model_name, ckpt_path) -> TrainResult:
+        tgt = 0
+        ti = getattr(data_bundle, "target_indices", None)
+        if ti:
+            tgt = ti[0]
         preds, trues = [], []
         for x, y in data_bundle.test_loader:
-            xb = np.asarray(x, dtype=float)   # (B, seq_len, 1)
+            xb = np.asarray(x, dtype=float)   # (B, seq_len, C)
             yb = np.asarray(y, dtype=float)   # (B, pred_len, 1)
             for i in range(xb.shape[0]):
-                preds.append(self._forecast(xb[i, :, 0]).reshape(-1, 1))
+                preds.append(self._forecast(xb[i, :, tgt]).reshape(-1, 1))
                 trues.append(yb[i])
         pred = np.stack(preds, axis=0)        # (N, pred_len, 1)
         true = np.stack(trues, axis=0)
