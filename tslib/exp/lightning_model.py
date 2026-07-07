@@ -40,9 +40,6 @@ class ForecastModule(pl.LightningModule):
         self._test_pred: List[np.ndarray] = []
         self._test_true: List[np.ndarray] = []
         self.test_metrics: Dict[str, float] = {}
-        # gate hooks (set by TimingGateCallback)
-        self._gate_skipped: bool = False
-        self._est_train_hours: float = float("nan")
 
     def forward(self, x):
         return self.model(x)
