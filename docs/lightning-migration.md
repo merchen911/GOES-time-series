@@ -32,12 +32,12 @@ dispatches to `_run_neural`, which:
    iTransformer, MICN, etc.).
 2. Wraps it in `ForecastModule(model, config, ctx, strategy=strategy)`, a
    `pl.LightningModule` defined in `tslib/exp/lightning_model.py`.
-3. Constructs a `pl.Trainer` with two callbacks — a `ModelCheckpoint` and a
-   `TimingGateCallback` (see below) — plus a `CSVLogger`, and calls
+3. Constructs a `pl.Trainer` with two callbacks — a `ModelCheckpoint` and an
+   `EarlyStopping` (see "Early stopping + long epochs" below) — plus a
+   `CSVLogger`, and calls
    `trainer.fit(module, data_bundle.train_loader, data_bundle.val_loader)`.
-4. If the run wasn't gated off, calls
-   `trainer.test(module, data_bundle.test_loader, ckpt_path="best")` and reads
-   back `module.test_metrics`.
+4. Calls `trainer.test(module, data_bundle.test_loader, ckpt_path="best")` and
+   reads back `module.test_metrics`.
 
 `ForecastModule` itself is small: `forward` delegates to the wrapped model,
 `training_step`/`validation_step` compute the configured loss
@@ -88,79 +88,73 @@ itself calls `.train()` before the training loop and `.eval()` before
 validation/test loops — so the adapter sees the correct mode without
 `ForecastModule` having to toggle it explicitly.
 
-## Train-time gate
+## Early stopping + long epochs
 
-Some backbones (TimesNet in particular) can be dramatically slower per
-epoch than others on the same hardware, especially at long `--seq_len` /
-`--pred_len`. Running a full multi-model comparison would otherwise risk one
-slow model consuming the whole time budget. The `TimingGateCallback`
-(`tslib/exp/callbacks.py`) is a `pl.Callback` attached to every neural run
-that estimates the full training time from a handful of probe batches and
-applies a policy before the run is allowed to continue.
+v003 no longer estimates a run's total training time up front and gates
+slow models off before they start. Instead, every neural run is simply
+given a long training budget (`--epochs`, default `10000`, in
+`tslib/configs/config.py`) and relies on `EarlyStopping` to stop it once it
+stops improving:
 
-It works by timing `on_train_batch_start`/`on_train_batch_end` for the first
-`--probe_batches` training batches (CUDA-synchronizing around each so GPU
-work is actually accounted for), taking the **median** duration to absorb
-first-batch CUDA/cuDNN warmup, then extrapolating:
-
-```
-est_train_hours = median(sec/batch) * trainer.num_training_batches * trainer.max_epochs / 3600
+```python
+early_cb = EarlyStopping(monitor="val_loss", mode="min",
+                         patience=config.early_stop_patience)
 ```
 
-The three flags governing this (all in `tslib/configs/config.py`):
+(`tslib/exp/strategy.py`, `_run_neural`). `--early_stop_patience` (default
+`10`) is the number of epochs `val_loss` is allowed to fail to improve
+before `Trainer.fit(...)` stops the run — so `--epochs` is a ceiling that is
+essentially never reached in practice; the real stopping point is whichever
+comes first, `patience` epochs without a `val_loss` improvement or
+`--epochs` total epochs.
 
-| flag | default | meaning |
-|---|---|---|
-| `--max_train_hours` | `6.0` | estimated training time above which the gate policy fires |
-| `--on_slow` | `skip` | policy when the estimate exceeds the limit: `skip` / `abort` / `proceed` |
-| `--probe_batches` | `3` | number of training batches timed to produce the estimate |
+`EarlyStopping` and `ModelCheckpoint` are both passed to the `Trainer` as
+callbacks:
 
-Regardless of outcome, the gate always prints one line once the estimate is
-available:
-
+```python
+ckpt_cb = ModelCheckpoint(monitor="val_loss", mode="min", save_top_k=1,
+                          dirpath=ckpt_dir, filename=ckpt_name)
+early_cb = EarlyStopping(monitor="val_loss", mode="min",
+                         patience=config.early_stop_patience)
+trainer = pl.Trainer(max_epochs=config.epochs, ..., callbacks=[ckpt_cb, early_cb], ...)
 ```
-[gate] model=<ModelClassName> s/batch=<sec> est_train~<hours>h (limit <max_train_hours>h)
+
+Every run — regardless of how long it trained — ends with
+`trainer.test(module, data_bundle.test_loader, ckpt_path="best")`, which
+reloads the best-`val_loss` checkpoint saved by `ModelCheckpoint` before
+scoring (see "Checkpointing" below). There is no run outcome where the test
+pass is skipped or the model is excluded from the comparison table on
+timing grounds.
+
+## Runtime pre-test
+
+Because there's no more automatic gate to cap a slow model's time budget,
+`tslib/benchmark/pretest.py` gives you a way to check projected runtimes
+*before* committing to a full sweep:
+
+```bash
+python3.12 -m tslib.benchmark.pretest
 ```
 
-If the estimate is within the limit, training proceeds normally and nothing
-else changes. If it exceeds the limit, the configured `--on_slow` policy
-applies:
+For each (track, seq_len, pred_len, fold, strategy) cell in the benchmark
+sweep, it builds every model in that cell, times a handful of real training
+steps (`--probe-batches`, default `3`) to get a median seconds/batch, and
+projects a runtime as `per_epoch_time × --nominal-epochs` (default `50`) —
+a yardstick for comparing models, not a prediction of the actual
+early-stopped duration. Any model whose projection exceeds
+`--threshold-hours` (default `12.0`) triggers an interactive prompt
+(`... ~<hours>h projected — proceed? [y/N]`); models at or under the
+threshold are auto-approved. Once every cell has been probed, the approved
+(cell, model) entries are written to `runs/bench/manifest.json`.
 
-- **`abort`** (fail loudly) — raises `RuntimeError` immediately, stopping the
-  whole run.
-- **`skip`** (default) — sets `trainer.should_stop = True` (training stops
-  after the current step) and marks the module as gated. Back in
-  `_run_neural`, `module._gate_skipped` is checked after `trainer.fit(...)`
-  returns; if set, the model is short-circuited straight to a `TrainResult`
-  with `skipped=True`, `est_train_hours` set to the estimate, empty
-  `metrics`, and **no** `trainer.test(...)` call. In `tslib/exp/exp.py`,
-  `build_comparison` includes `skipped` and `est_train_hours` as columns in
-  the comparison table for every run, and `run_experiment` prints one line
-  per skipped model to stdout:
+`tslib/benchmark/driver.py` then consumes that file via `--manifest`:
 
-  ```
-  SKIPPED (too slow): <model_name> ~<est_train_hours>h — re-include with --on_slow proceed
-  ```
+```bash
+python3.12 -m tslib.benchmark.driver --manifest runs/bench/manifest.json
+```
 
-- **`proceed`** — log-only: the estimate is still printed and still recorded
-  in `est_train_hours`, but training continues to completion and the model
-  is scored normally.
-
-To force a model that was previously skipped back into a run, pass
-`--on_slow proceed` (there is no per-model override — it applies to every
-model in that invocation).
-
-**Scope of the estimate:** the gate estimates **training** time only — the
-epochs the `Trainer` will run, extrapolated from probed training batches. It
-says nothing about evaluation cost. For the `recursive` strategy in
-particular, evaluation is far more expensive than training per window (a
-model like LSTM rolls `pred_len` sequential single-step calls per test
-window during `validation_step`/`test_step`, vs. one step during
-`training_step`), and that cost is outside what this gate measures.
-Recursive-rollout evaluation cost is instead controlled separately, at the
-benchmark-design level, by sub-sampling the test windows fed to the eval
-loop (see `docs/benchmark-conditions.md`, "Deferred: statistic" section, for
-the same sub-sampling pattern applied to the `statistic` strategy).
+so a full sweep only ever launches the models a human has looked at and
+approved (or that were cheap enough not to need review).
 
 ## Checkpointing
 
@@ -174,9 +168,10 @@ logs) against the best seen so far, and if it improves, overwrites the saved
 checkpoint — so at most one checkpoint file, the best one, exists per model
 at `runs/<run_name>/ckpt/<model>.ckpt`.
 
-Once `trainer.fit(...)` completes (and the run wasn't gated off), the test
-pass reloads that best checkpoint rather than whatever weights happen to be
-in memory at the end of training:
+Once `trainer.fit(...)` completes (whether it ran to `--epochs` or, more
+typically, stopped early via `EarlyStopping`), the test pass reloads that
+best checkpoint rather than whatever weights happen to be in memory at the
+end of training:
 
 ```python
 trainer.test(module, data_bundle.test_loader, ckpt_path="best")
