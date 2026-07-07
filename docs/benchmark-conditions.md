@@ -35,26 +35,39 @@ sees GPU 1 as `cuda:0`). Do not use empty `CUDA_VISIBLE_DEVICES=""` (that disabl
 | `--loss` | `mse` (log10 space); `weighted_mse` optional for rare-event runs |
 | `--metrics` | `rmse mae tss hss pod far` |
 | `--seed` | `42` (repeat 3 seeds for variance if time allows) |
-| neural HP | `--epochs 30 --batch_size 64 --lr 1e-3 --d_model 128 --num_layers 2 --dropout 0.1` |
+| neural HP | `--epochs 10000 --early_stop_patience 10 --batch_size 64 --lr 1e-3 --d_model 128 --num_layers 2 --dropout 0.1` |
 
-### Train-time gate
+### Pre-test + early stopping
 
-Every neural run goes through the v003 Lightning train-time gate
-(`TimingGateCallback`), which probes the first few training batches and
-extrapolates a full-training-time estimate before letting a model run to
-completion. Defaults used here (not overridden in the example commands
-below): `--max_train_hours 6.0`, `--on_slow skip`, `--probe_batches 3`.
+v003 no longer gates a run's training time from inside `main.py`. Instead
+there are two steps:
+
+1. **Pre-test** — before launching the full sweep, run
+   `python3.12 -m tslib.benchmark.pretest` (`tslib/benchmark/pretest.py`).
+   It probes every cell's models with a few real training steps
+   (`--probe-batches`, default `3`), projects a runtime as
+   `per_epoch_time × --nominal-epochs` (default `50`) — a yardstick, not the
+   actual early-stopped duration — and, for any model whose projection
+   exceeds `--threshold-hours` (default `12.0`), asks interactively whether
+   to proceed. Approved (cell, model) entries are written to
+   `runs/bench/manifest.json`.
+2. **Driver** — run the sweep against only the approved entries:
+   `python3.12 -m tslib.benchmark.driver --manifest runs/bench/manifest.json`.
+
+Actual training uses `--epochs 10000` with
+`EarlyStopping(monitor="val_loss", patience=--early_stop_patience [10])`, so
+most runs stop long before the 10000-epoch ceiling once `val_loss` stops
+improving for 10 epochs.
 
 **`timesnet` is excluded from this benchmark entirely** — it is far too slow
 (it alone took ~14.5 h for 3 epochs on the full dataset in the pilot), so it
-is dropped from every model set below. The gate remains as a safety net for
-the rest: any remaining model estimated to exceed the limit at the long
-`seq_len`/`pred_len` sweep points is auto-skipped (excluded from
-`comparison.csv`, with a `SKIPPED (too slow): ...` line on stdout) rather
-than silently eating the whole benchmark's time budget. To force a skipped
-cell to run anyway, re-run that specific invocation with `--on_slow proceed`.
-See `docs/lightning-migration.md` for the full gate mechanics and the other
-`--on_slow` policies.
+is dropped from every model set below. The pre-test's `--nominal-epochs` /
+`--threshold-hours` double-check is the safety net for the rest: any
+remaining model whose projected runtime is too high at the long
+`seq_len`/`pred_len` sweep points is caught and confirmed (or declined)
+before it ever gets a driver invocation, rather than silently eating the
+whole benchmark's time budget. See `docs/lightning-migration.md` for the
+full pre-test/manifest and early-stopping mechanics.
 
 > **Deferred (note only):** `--pred_len 864` (3-day horizon) — run later once the
 > 0.5 d / 1 d horizons are validated. The 3-day recursive rollout is the heaviest config.
@@ -72,7 +85,7 @@ See `docs/lightning-migration.md` for the full gate mechanics and the other
 | `itransformer` | direct | one-shot |
 | `timemixer` | direct | one-shot |
 
-`timesnet` excluded (too slow — see the train-time gate note above). `etsformer`
+`timesnet` excluded (too slow — see "Pre-test + early stopping" above). `etsformer`
 excluded (pre-existing broken `layers` imports). Because `--forecast_strategy`
 is run-level, each (track, seq_len, pred_len) cell is **two invocations** — one
 `--forecast_strategy recursive --models lstm`, one `--forecast_strategy direct --models
@@ -129,7 +142,8 @@ export SW_DATA_DIR=/NAS/ioGuard3/vol3/spaceai/SW_framework/data/goes_data/proces
 P=$SW_DATA_DIR/kasi_swpc_particle_5m.parquet
 X=$SW_DATA_DIR/kasi_swpc_xray_1m.parquet
 COMMON="--seq_len 288 --pred_len 288 --n_fold 5 --fold_numb 0 --transform log10 \
-  --metrics rmse mae tss hss pod far --epochs 30 --batch_size 64 --lr 1e-3"
+  --metrics rmse mae tss hss pod far --epochs 10000 --early_stop_patience 10 \
+  --batch_size 64 --lr 1e-3"
 
 # --- UNI-A: p_gt10 — LSTM recursive + others direct (same split), then merge ---
 CUDA_VISIBLE_DEVICES=1 python main.py --data_path $P --target_col p_gt10 $COMMON \
