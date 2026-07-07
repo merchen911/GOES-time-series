@@ -107,6 +107,14 @@ class TestEnableGroup2(unittest.TestCase):
         _assert_builds(self, ["segrnn_thuml"])
 
 
+class TestNewLightweight1(unittest.TestCase):
+    def test_builds(self):
+        _assert_builds(self, ["dlinear", "frets"])
+
+    def test_builds_multivar(self):
+        _assert_builds(self, ["dlinear", "frets"], channels=3)
+
+
 class TestEtsformer(unittest.TestCase):
     def test_builds(self):
         # etsformer asserts e_layers == d_layers (encoder/decoder layer
