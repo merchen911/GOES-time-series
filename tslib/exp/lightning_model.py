@@ -5,10 +5,10 @@ from typing import Dict, List
 
 import numpy as np
 import torch
-from torch import nn
+import pytorch_lightning as pl
 
 from tslib.exp.losses import build_loss
-from tslib.exp.metrics import MetricContext
+from tslib.exp.metrics import run_metrics
 
 
 @dataclass
@@ -18,70 +18,63 @@ class TrainResult:
     metrics: Dict[str, float]
     ckpt_path: str
     strategy: str = "direct"
+    skipped: bool = False
+    est_train_hours: float = float("nan")
 
 
-class pl_model:
+class ForecastModule(pl.LightningModule):
+    """Wraps a forecast adapter/model and drives it under PyTorch Lightning.
+
+    The wrapped model's own train/eval branch (e.g. RecursiveForecastAdapter's
+    1-step train vs full rollout eval) is honored automatically because
+    Lightning toggles module train/eval mode around the step hooks.
     """
-    legacy/2026의 lightning_model 명명/역할을 유지하되,
-    최소 실행 프레임워크를 위해 순수 PyTorch 학습 루프를 제공.
-    """
 
-    def __init__(self, model: nn.Module, config) -> None:
+    def __init__(self, model, config, metric_ctx, strategy: str = "direct") -> None:
+        super().__init__()
         self.model = model
         self.config = config
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.model = self.model.to(self.device)
+        self.metric_ctx = metric_ctx
+        self.strategy = strategy
         self.criterion = build_loss(config)
-        self.optimizer = torch.optim.Adam(
-            self.model.parameters(), lr=self.config.lr, weight_decay=self.config.weight_decay
-        )
+        self._test_pred: List[np.ndarray] = []
+        self._test_true: List[np.ndarray] = []
+        self.test_metrics: Dict[str, float] = {}
+        # gate hooks (set by TimingGateCallback)
+        self._gate_skipped: bool = False
+        self._est_train_hours: float = float("nan")
 
-    def _run_epoch(self, loader, train: bool) -> float:
-        self.model.train(train)
-        losses: List[float] = []
-        for x, y in loader:
-            x = x.to(self.device)
-            y = y.to(self.device)
-            pred = self.model(x)
-            loss = self.criterion(pred, y[:, :pred.shape[1], :])
-            if train:
-                self.optimizer.zero_grad()
-                loss.backward()
-                self.optimizer.step()
-            losses.append(float(loss.detach().cpu().item()))
-        return float(np.mean(losses)) if losses else float("inf")
+    def forward(self, x):
+        return self.model(x)
 
-    @torch.no_grad()
-    def evaluate(self, loader, ctx) -> Dict[str, float]:
-        self.model.eval()
-        all_pred, all_true = [], []
-        for x, y in loader:
-            pred = self.model(x.to(self.device)).cpu().numpy()
-            all_pred.append(pred)
-            all_true.append(np.asarray(y))
-        pred = np.concatenate(all_pred, axis=0)
-        true = np.concatenate(all_true, axis=0)
-        from tslib.exp.metrics import run_metrics
-        return run_metrics(pred, true, ctx, self.config.metrics)
+    def training_step(self, batch, batch_idx):
+        x, y = batch
+        pred = self(x)
+        loss = self.criterion(pred, y[:, :pred.shape[1], :])
+        self.log("train_loss", loss, prog_bar=False)
+        return loss
 
-    def fit_and_test(self, datamodule, model_name: str, ckpt_path: str) -> TrainResult:
-        best_val = float("inf")
-        for _ in range(self.config.epochs):
-            self._run_epoch(datamodule.train_loader, train=True)
-            val_loss = self._run_epoch(datamodule.val_loader, train=False)
-            if val_loss < best_val:
-                best_val = val_loss
-                torch.save(self.model.state_dict(), ckpt_path)
+    def validation_step(self, batch, batch_idx):
+        x, y = batch
+        pred = self(x)
+        loss = self.criterion(pred, y[:, :pred.shape[1], :])
+        self.log("val_loss", loss, prog_bar=True)
+        return loss
 
-        self.model.load_state_dict(torch.load(ckpt_path, map_location=self.device))
-        ctx = MetricContext(
-            thresholds=getattr(self.config, "event_threshold", None),
-            transform=getattr(self.config, "transform", "none"),
-            target_cols=list(getattr(datamodule, "target_cols", []) or []))
-        metrics = self.evaluate(datamodule.test_loader, ctx)
-        return TrainResult(
-            model_name=model_name,
-            best_val_loss=best_val,
-            metrics=metrics,
-            ckpt_path=ckpt_path,
-        )
+    def test_step(self, batch, batch_idx):
+        x, y = batch
+        pred = self(x)
+        self._test_pred.append(pred.detach().cpu().numpy())
+        self._test_true.append(y.detach().cpu().numpy())
+
+    def on_test_epoch_end(self):
+        pred = np.concatenate(self._test_pred, axis=0)
+        true = np.concatenate(self._test_true, axis=0)
+        self.test_metrics = run_metrics(pred, true, self.metric_ctx,
+                                        self.config.metrics)
+        self._test_pred.clear()
+        self._test_true.clear()
+
+    def configure_optimizers(self):
+        return torch.optim.Adam(self.model.parameters(), lr=self.config.lr,
+                                weight_decay=self.config.weight_decay)
