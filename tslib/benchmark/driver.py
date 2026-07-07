@@ -57,9 +57,7 @@ FIXED = [
     "--d_model", "128",
     "--num_layers", "2",
     "--dropout", "0.1",
-    "--max_train_hours", "6.0",
-    "--on_slow", "skip",
-    "--probe_batches", "3",
+    "--early_stop_patience", "10",
 ]
 
 # Per-track definitions. ``recursive_models`` is empty where recursive is not
@@ -111,29 +109,49 @@ def enumerate_cells(tracks, seq_lens, pred_lens, folds, strategies):
     return cells
 
 
-def build_cmd(cell, epochs: int) -> list[str]:
-    """The exact ``main.py`` argv for one cell."""
+def cell_argv(cell, epochs: int, models: list[str]) -> list[str]:
+    """main.py flag list for one cell with an explicit model list."""
     t = TRACKS[cell["track"]]
-    models = models_for(cell["track"], cell["strategy"])
     run_name = run_name_for(cell["track"], cell["seq_len"], cell["pred_len"],
                             cell["fold"], cell["strategy"])
-    cmd = [sys.executable, str(REPO / "main.py"),
-           "--data_path", t["data_path"],
-           "--target_col", t["target_col"],
-           "--seq_len", str(cell["seq_len"]),
-           "--pred_len", str(cell["pred_len"]),
-           "--fold_numb", str(cell["fold"]),
-           "--forecast_strategy", cell["strategy"],
-           "--run_name", run_name,
-           "--sort_metric", t["sort_metric"],
-           "--epochs", str(epochs),
-           "--event_threshold", *t["event_threshold"],
-           "--models", *models,
-           *FIXED]
+    argv = ["--data_path", t["data_path"],
+            "--target_col", t["target_col"],
+            "--seq_len", str(cell["seq_len"]),
+            "--pred_len", str(cell["pred_len"]),
+            "--fold_numb", str(cell["fold"]),
+            "--forecast_strategy", cell["strategy"],
+            "--run_name", run_name,
+            "--sort_metric", t["sort_metric"],
+            "--epochs", str(epochs),
+            "--event_threshold", *t["event_threshold"],
+            "--models", *models,
+            *FIXED]
     if t["channels"]:
-        cmd += ["--channels", *t["channels"],
-                "--target_cols", *t["target_cols"]]
-    return cmd
+        argv += ["--channels", *t["channels"],
+                 "--target_cols", *t["target_cols"]]
+    return argv
+
+
+def build_cmd(cell, epochs: int, models=None) -> list[str]:
+    if models is None:
+        models = models_for(cell["track"], cell["strategy"])
+    return [sys.executable, str(REPO / "main.py"), *cell_argv(cell, epochs, models)]
+
+
+def cells_from_manifest(manifest: dict):
+    """Group manifest['approved'] entries into [(cell, [models...]), ...],
+    preserving first-seen order of cells and of models within a cell."""
+    order, grouped = [], {}
+    for e in manifest.get("approved", []):
+        cell = {"track": e["track"], "seq_len": e["seq_len"],
+                "pred_len": e["pred_len"], "fold": e["fold"],
+                "strategy": e["strategy"]}
+        key = (e["track"], e["seq_len"], e["pred_len"], e["fold"], e["strategy"])
+        if key not in grouped:
+            grouped[key] = {"cell": cell, "models": []}
+            order.append(key)
+        grouped[key]["models"].append(e["model"])
+    return [(grouped[k]["cell"], grouped[k]["models"]) for k in order]
 
 
 def comparison_path(cell, runs_root: Path) -> Path:
@@ -164,17 +182,17 @@ def rebuild_master(cells, runs_root: Path, master_path: Path) -> int:
     return len(frames)
 
 
-def run_benchmark(cells, epochs: int, runs_root: Path, master_path: Path,
-                  dry_run: bool = False) -> None:
-    total = len(cells)
+def run_benchmark(runs, epochs, runs_root, master_path, dry_run=False):
+    total = len(runs)
     env = os.environ.copy()
-    for i, cell in enumerate(cells, 1):
+    cells = [c for c, _ in runs]
+    for i, (cell, models) in enumerate(runs, 1):
         run_name = run_name_for(cell["track"], cell["seq_len"],
                                 cell["pred_len"], cell["fold"], cell["strategy"])
-        cmd = build_cmd(cell, epochs)
+        cmd = build_cmd(cell, epochs, models)
         cp = comparison_path(cell, runs_root)
         if dry_run:
-            print(f"[{i}/{total}] {run_name}")
+            print(f"[{i}/{total}] {run_name} models={models}")
             print("    " + " ".join(cmd))
             continue
         if cp.exists():
@@ -205,21 +223,31 @@ def parse_args(argv=None):
     p.add_argument("--folds", nargs="+", type=int, default=[0])
     p.add_argument("--strategies", nargs="+", default=["direct"],
                    choices=["direct", "recursive"])
-    p.add_argument("--epochs", type=int, default=30)
+    p.add_argument("--epochs", type=int, default=10000)
     p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--manifest", type=str, default=None,
+                   help="run only (cell,model) entries approved in this manifest")
     return p.parse_args(argv)
 
 
 def main(argv=None):
     args = parse_args(argv)
-    cells = enumerate_cells(args.tracks, args.seq_lens, args.pred_lens,
-                            args.folds, args.strategies)
     runs_root = REPO / "runs"
     master_path = runs_root / "bench" / "results_master.csv"
-    print(f"Planned cells: {len(cells)} "
-          f"(tracks={args.tracks} seq={args.seq_lens} pred={args.pred_lens} "
-          f"folds={args.folds} strategies={args.strategies} epochs={args.epochs})")
-    run_benchmark(cells, args.epochs, runs_root, master_path,
+    if args.manifest:
+        import json
+        with open(args.manifest) as f:
+            manifest = json.load(f)
+        runs = cells_from_manifest(manifest)
+        print(f"Manifest {args.manifest}: {len(runs)} approved cells")
+    else:
+        cells = enumerate_cells(args.tracks, args.seq_lens, args.pred_lens,
+                                args.folds, args.strategies)
+        runs = [(c, models_for(c["track"], c["strategy"])) for c in cells]
+        print(f"Planned cells: {len(runs)} (tracks={args.tracks} "
+              f"seq={args.seq_lens} pred={args.pred_lens} folds={args.folds} "
+              f"strategies={args.strategies} epochs={args.epochs})")
+    run_benchmark(runs, args.epochs, runs_root, master_path,
                   dry_run=args.dry_run)
 
 
