@@ -25,13 +25,16 @@ class Model(nn.Module):
             self.pred_len = configs.pred_len
 
         self.seg_len = configs.seg_len
-        self.seg_num_x = self.seq_len // self.seg_len 
+        # THUML's SegRNN.py has no padding branch here: it requires seq_len to
+        # be evenly divisible by seg_len (the reshape in encoder() below is
+        # only shape-valid in that case) and simply floor-divides. The
+        # in-repo version previously added a branch that incremented
+        # seg_num_x by 1 whenever seq_len % seg_len == 0 (backwards -- padding
+        # would only ever be needed when NOT evenly divisible) without
+        # actually zero-padding the tensor, making the reshape below
+        # shape-invalid. Removed to match upstream.
+        self.seg_num_x = self.seq_len // self.seg_len
 
-        self.padding= False
-        if self.seq_len % self.seg_len == 0:
-            self.padding = True
-            self.seg_num_x += 1
-            
         self.seg_num_y = max(self.pred_len // self.seg_len, 1)
 
         # building model

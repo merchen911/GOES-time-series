@@ -103,8 +103,41 @@ def exp_parser() -> argparse.ArgumentParser:
                         help="SCINet: tree recursion depth")
     parser.add_argument("--causal_block_level", type=int, default=4,
                         help="SCINet: causal conv blocks per SCIBlock")
-    parser.add_argument("--seg_len", type=int, default=48,
-                        help="SegRNN: segment length for segment-wise iteration")
+    parser.add_argument("--seg_len", type=int, default=24,
+                        help="SegRNN: segment length for segment-wise iteration "
+                             "(must evenly divide both seq_len and pred_len; "
+                             "48 does not divide pred_len=24 and produces an "
+                             "invalid reshape in SegRNN's decoder)")
+    # PatchMixer / SegRNN / xPatch (upstream repo defaults)
+    parser.add_argument("--revin", type=int, default=1,
+                        help="PatchMixer/SegRNN/xPatch: apply RevIN normalization")
+    parser.add_argument("--affine", type=int, default=0,
+                        help="PatchMixer: RevIN affine transform")
+    parser.add_argument("--subtract_last", type=int, default=0,
+                        help="PatchMixer: RevIN subtract-last instead of mean")
+    parser.add_argument("--head_dropout", type=float, default=0.0,
+                        help="PatchMixer: dropout in the prediction heads")
+    parser.add_argument("--mixer_kernel_size", type=int, default=8,
+                        help="PatchMixer: depthwise conv kernel size")
+    parser.add_argument("--a", type=int, default=2,
+                        help="PatchMixer: PatchMixerLayer output channel count")
+    parser.add_argument("--rnn_type", type=str, default="gru",
+                        choices=["rnn", "gru", "lstm"],
+                        help="SegRNN: recurrent cell type")
+    parser.add_argument("--dec_way", type=str, default="pmf",
+                        choices=["rmf", "pmf"],
+                        help="SegRNN: decoding scheme")
+    parser.add_argument("--channel_id", type=int, default=1,
+                        help="SegRNN: use per-channel positional embedding")
+    parser.add_argument("--padding_patch", type=str, default="end",
+                        help="xPatch: patch padding mode")
+    parser.add_argument("--ma_type", type=str, default="ema",
+                        choices=["ema", "dema", "reg"],
+                        help="xPatch: moving-average decomposition type")
+    parser.add_argument("--alpha", type=float, default=0.3,
+                        help="xPatch: EMA/DEMA smoothing factor")
+    parser.add_argument("--beta", type=float, default=0.3,
+                        help="xPatch: DEMA secondary smoothing factor")
 
     # modeling: pluggable loss / metrics
     parser.add_argument("--loss", type=str, default="mse")
