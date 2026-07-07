@@ -106,9 +106,16 @@ def main(argv=None):
     approved, rejected = [], 0
     for cell in cells:
         models = driver.models_for(cell["track"], cell["strategy"])
-        cfg = _config_for(cell, models[0], args.nominal_epochs)
-        bundle = DataModule(cfg).setup()  # build_model sets enc_in/dec_in/c_out later
-        steps = len(bundle.train_loader)
+        try:
+            cfg = _config_for(cell, models[0], args.nominal_epochs)
+            bundle = DataModule(cfg).setup()  # build_model sets enc_in/dec_in/c_out later
+            steps = len(bundle.train_loader)
+        except Exception as e:  # data/config setup failed: skip whole cell
+            print(f"  {cell['track']} seq{cell['seq_len']} "
+                  f"pred{cell['pred_len']}: cell setup failed ({e}) — "
+                  f"all models rejected")
+            rejected += len(models)
+            continue
         for model in models:
             try:
                 mcfg = _config_for(cell, model, args.nominal_epochs)
