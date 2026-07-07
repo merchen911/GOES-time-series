@@ -7,7 +7,6 @@ import pytorch_lightning as pl
 
 from tslib.exp.callbacks import estimate_train_hours, TimingGateCallback
 from tslib.exp.lightning_model import ForecastModule
-from tslib.exp.metrics import MetricContext
 
 
 def _cfg(on_slow, max_hours=6.0, probe=2):

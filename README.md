@@ -131,7 +131,7 @@ See `docs/`:
 
 ## Outputs
 
-- `runs/<run_name>/ckpt/<model>.pt`
+- `runs/<run_name>/ckpt/<model>.ckpt`
 - `runs/<run_name>/score/comparison.csv`
 
 ## License
