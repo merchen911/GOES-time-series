@@ -123,5 +123,20 @@ class TestManifest(unittest.TestCase):
         self.assertNotIn("patchtst", cmd)
 
 
+class TestCellComplete(unittest.TestCase):
+    def test_complete_only_when_all_models_present(self):
+        cell = {"track": "uni_a", "seq_len": 288, "pred_len": 144,
+                "fold": 0, "strategy": "direct"}
+        with tempfile.TemporaryDirectory() as d:
+            runs_root = Path(d) / "runs"
+            self.assertFalse(driver.cell_is_complete(cell, ["patchtst"], runs_root))
+            cp = driver.comparison_path(cell, runs_root)
+            cp.parent.mkdir(parents=True, exist_ok=True)
+            pd.DataFrame([{"model": "patchtst"}, {"model": "timemixer"}]).to_csv(cp, index=False)
+            self.assertTrue(driver.cell_is_complete(cell, ["patchtst"], runs_root))
+            self.assertTrue(driver.cell_is_complete(cell, ["patchtst", "timemixer"], runs_root))
+            self.assertFalse(driver.cell_is_complete(cell, ["itransformer"], runs_root))
+
+
 if __name__ == "__main__":
     unittest.main()
