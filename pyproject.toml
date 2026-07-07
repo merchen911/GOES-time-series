@@ -7,7 +7,7 @@ name = "tslib"
 version = "0.3.0"
 description = "GOES space-weather time-series forecasting framework"
 requires-python = ">=3.12"
-dependencies = ["numpy", "pandas", "torch", "statsmodels", "pytorch_lightning"]
+dependencies = ["numpy", "pandas", "torch", "statsmodels", "pytorch_lightning", "einops"]
 
 [tool.setuptools.packages.find]
 include = ["tslib*"]

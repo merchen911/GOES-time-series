@@ -3,3 +3,4 @@ pandas
 torch
 statsmodels
 pytorch_lightning
+einops
