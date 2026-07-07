@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import os
+
 import numpy as np
 
 from tslib.model import build_model
-from tslib.exp.lightning_model import pl_model, TrainResult
+from tslib.exp.lightning_model import ForecastModule, TrainResult
 from tslib.exp.metrics import MetricContext, run_metrics
 
 
@@ -49,14 +51,43 @@ class StatisticalRunner:
                            strategy="statistic")
 
 
+def _run_neural(strategy, model_name, data_bundle, config, ckpt_path) -> TrainResult:
+    import torch
+    import pytorch_lightning as pl
+    from pytorch_lightning.callbacks import ModelCheckpoint
+    from pytorch_lightning.loggers import CSVLogger
+
+    model = build_model(model_name, config, data_bundle.input_size,
+                        data_bundle.target_indices, strategy=strategy)
+    ctx = MetricContext(
+        thresholds=getattr(config, "event_threshold", None),
+        transform=getattr(config, "transform", "none"),
+        target_cols=list(getattr(data_bundle, "target_cols", []) or []))
+    module = ForecastModule(model, config, ctx, strategy=strategy)
+
+    ckpt_dir = os.path.dirname(ckpt_path) or "."
+    ckpt_name = os.path.splitext(os.path.basename(ckpt_path))[0]
+    ckpt_cb = ModelCheckpoint(monitor="val_loss", mode="min", save_top_k=1,
+                              dirpath=ckpt_dir, filename=ckpt_name)
+    accelerator = "gpu" if torch.cuda.is_available() else "cpu"
+    trainer = pl.Trainer(
+        max_epochs=config.epochs, accelerator=accelerator, devices=1,
+        callbacks=[ckpt_cb],
+        logger=CSVLogger(save_dir=ckpt_dir, name="lightning"),
+        enable_progress_bar=False, enable_model_summary=False)
+    trainer.fit(module, data_bundle.train_loader, data_bundle.val_loader)
+
+    trainer.test(module, data_bundle.test_loader, ckpt_path="best")
+    best = (float(ckpt_cb.best_model_score)
+            if ckpt_cb.best_model_score is not None else float("nan"))
+    return TrainResult(model_name=model_name, best_val_loss=best,
+                       metrics=module.test_metrics, ckpt_path=ckpt_path,
+                       strategy=strategy)
+
+
 def run_strategy(strategy, model_name, data_bundle, config, ckpt_path) -> TrainResult:
     if strategy in ("direct", "recursive"):
-        model = build_model(model_name, config, data_bundle.input_size,
-                            data_bundle.target_indices, strategy=strategy)
-        result = pl_model(model, config).fit_and_test(
-            data_bundle, model_name=model_name, ckpt_path=ckpt_path)
-        result.strategy = strategy
-        return result
+        return _run_neural(strategy, model_name, data_bundle, config, ckpt_path)
     if strategy == "statistic":
         return StatisticalRunner(model_name, config).fit_and_test(
             data_bundle, model_name=model_name, ckpt_path=ckpt_path)
