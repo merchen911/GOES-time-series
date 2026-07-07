@@ -16,6 +16,10 @@ and flare-related quantities.
   once (`--target_cols`).
 - **Multiple backbones** — LSTM, TimesNet, PatchTST, iTransformer, MICN, and
   more, run and compared in one command.
+- **PyTorch Lightning training** — neural models train under a real
+  `pytorch_lightning` `Trainer`, with checkpointing and a train-time gate
+  that auto-skips models estimated to run too long (see
+  [`docs/lightning-migration.md`](docs/lightning-migration.md)).
 
 > **Data is not included** in this repository and is shared separately. Point
 > `SW_DATA_DIR` at your processed-parquet directory before running (see below).
@@ -28,6 +32,11 @@ The code lives in the importable `tslib` package. Install it editable so
 ```bash
 pip install -e .        # Python 3.12 recommended (netCDF/parquet libs)
 ```
+
+Core dependencies (see `requirements.txt` / `pyproject.toml`): `numpy`,
+`pandas`, `torch`, `statsmodels`, and `pytorch_lightning` (the neural
+training loop runs on `pytorch_lightning`'s `Trainer`/`LightningModule`;
+see [`docs/lightning-migration.md`](docs/lightning-migration.md)).
 
 Then, e.g. in a notebook under `notebook/`:
 
@@ -117,6 +126,8 @@ See `docs/`:
 - `multivar-join-{design,plan}.md` — multivariate common-grid join, variable
   lengths, multi-target output
 - `model-extensibility-design.md` — backbone / loss / metric registries
+- `lightning-migration.md` — pytorch_lightning training architecture,
+  customizing `ForecastModule`, the train-time gate, and checkpointing
 
 ## Outputs
 
