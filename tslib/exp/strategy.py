@@ -56,6 +56,7 @@ def _run_neural(strategy, model_name, data_bundle, config, ckpt_path) -> TrainRe
     import pytorch_lightning as pl
     from pytorch_lightning.callbacks import ModelCheckpoint
     from pytorch_lightning.loggers import CSVLogger
+    from tslib.exp.callbacks import TimingGateCallback
 
     model = build_model(model_name, config, data_bundle.input_size,
                         data_bundle.target_indices, strategy=strategy)
@@ -72,17 +73,22 @@ def _run_neural(strategy, model_name, data_bundle, config, ckpt_path) -> TrainRe
     accelerator = "gpu" if torch.cuda.is_available() else "cpu"
     trainer = pl.Trainer(
         max_epochs=config.epochs, accelerator=accelerator, devices=1,
-        callbacks=[ckpt_cb],
+        callbacks=[ckpt_cb, TimingGateCallback(config)],
         logger=CSVLogger(save_dir=ckpt_dir, name="lightning"),
         enable_progress_bar=False, enable_model_summary=False)
     trainer.fit(module, data_bundle.train_loader, data_bundle.val_loader)
+
+    if module._gate_skipped:
+        return TrainResult(model_name=model_name, best_val_loss=float("nan"),
+                           metrics={}, ckpt_path=ckpt_path, strategy=strategy,
+                           skipped=True, est_train_hours=module._est_train_hours)
 
     trainer.test(module, data_bundle.test_loader, ckpt_path="best")
     best = (float(ckpt_cb.best_model_score)
             if ckpt_cb.best_model_score is not None else float("nan"))
     return TrainResult(model_name=model_name, best_val_loss=best,
                        metrics=module.test_metrics, ckpt_path=ckpt_path,
-                       strategy=strategy)
+                       strategy=strategy, est_train_hours=module._est_train_hours)
 
 
 def run_strategy(strategy, model_name, data_bundle, config, ckpt_path) -> TrainResult:
