@@ -81,6 +81,19 @@ def exp_parser() -> argparse.ArgumentParser:
     parser.add_argument("--top_k", type=int, default=5)
     parser.add_argument("--num_kernels", type=int, default=6)
     parser.add_argument("--num_class", type=int, default=1)
+    # iTransformer
+    parser.add_argument("--output_attention", action="store_true",
+                        help="iTransformer: return attention weights")
+    # TimeMixer (THUML Time-Series-Library defaults)
+    parser.add_argument("--moving_avg", type=int, default=25)
+    parser.add_argument("--decomp_method", type=str, default="moving_avg",
+                        choices=["moving_avg", "dft_decomp"])
+    parser.add_argument("--channel_independence", type=int, default=1)
+    parser.add_argument("--use_norm", type=int, default=1)
+    parser.add_argument("--down_sampling_layers", type=int, default=3)
+    parser.add_argument("--down_sampling_window", type=int, default=2)
+    parser.add_argument("--down_sampling_method", type=str, default="avg",
+                        choices=["avg", "max", "conv"])
 
     # modeling: pluggable loss / metrics
     parser.add_argument("--loss", type=str, default="mse")

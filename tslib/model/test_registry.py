@@ -30,3 +30,22 @@ class TestModelRegistry(unittest.TestCase):
                               num_layers=2, dropout=0.1)
         m = build_model("lstm", cfg, input_size=2, target_indices=[0])
         self.assertEqual(tuple(m(torch.randn(2, 24, 2)).shape), (2, 1, 1))
+
+    def test_benchmark_direct_models_construct_and_forward(self):
+        # Guards against a config attr being read by a model but never defined
+        # in exp_parser (which silently made itransformer/timemixer unrunnable).
+        from tslib.configs.config import exp_parser, config_postprocess
+        argv = ["--data_path", "/tmp/x.parquet", "--target_col", "p_gt10",
+                "--seq_len", "96", "--pred_len", "24", "--fold_numb", "0",
+                "--forecast_strategy", "direct", "--event_threshold", "10",
+                "--metrics", "rmse", "mae", "tss", "hss", "pod", "far",
+                "--models", "patchtst"]
+        cfg = config_postprocess(exp_parser().parse_args(argv))
+        x = torch.zeros(2, cfg.seq_len, 1)
+        for name in ["lstm", "patchtst", "itransformer", "timemixer"]:
+            model = build_model(name, cfg, input_size=1, target_indices=[0],
+                                strategy="direct")
+            model.eval()
+            with torch.no_grad():
+                out = model(x)
+            self.assertEqual(tuple(out.shape), (2, 24, 1), msg=name)
