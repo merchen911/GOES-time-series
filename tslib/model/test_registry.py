@@ -7,10 +7,13 @@ from tslib.model.registry import MODEL_REGISTRY, register_model
 from tslib.model import build_model
 
 
-def _real_cfg(models, seq_len=96, pred_len=24, channels=1):
+def _real_cfg(models, seq_len=96, pred_len=24, channels=1, extra_argv=None):
     """Build a real exp_parser config for the given model names (direct
     strategy). `channels>1` also sets --target_cols so multivariable model
-    variants can be exercised (used by later model-zoo tasks)."""
+    variants can be exercised (used by later model-zoo tasks). `extra_argv`
+    lets an individual model's test tack on extra CLI flags (e.g. etsformer
+    needs --d_layers to match the --e_layers default) without touching the
+    defaults used by every other model's test."""
     from tslib.configs.config import exp_parser, config_postprocess
     argv = ["--data_path", "/tmp/x.parquet", "--target_col", "p_gt10",
             "--seq_len", str(seq_len), "--pred_len", str(pred_len),
@@ -20,13 +23,15 @@ def _real_cfg(models, seq_len=96, pred_len=24, channels=1):
             "--models", *models]
     if channels > 1:
         argv += ["--target_cols"] + [f"col{i}" for i in range(channels)]
+    if extra_argv:
+        argv += list(extra_argv)
     return config_postprocess(exp_parser().parse_args(argv))
 
 
-def _assert_builds(testcase, names, channels=1):
+def _assert_builds(testcase, names, channels=1, extra_argv=None):
     """Construct + forward each named model from a real config; assert the
     output shape is (batch, pred_len, n_targets)."""
-    cfg = _real_cfg(names, channels=channels)
+    cfg = _real_cfg(names, channels=channels, extra_argv=extra_argv)
     x = torch.zeros(2, cfg.seq_len, channels)
     tgt = list(range(channels)) if channels > 1 else [0]
     for name in names:
@@ -100,3 +105,11 @@ class TestEnableGroup2(unittest.TestCase):
         # upstream (which has no such branch and instead requires seg_len to
         # evenly divide seq_len). Now builds like any other registered model.
         _assert_builds(self, ["segrnn_thuml"])
+
+
+class TestEtsformer(unittest.TestCase):
+    def test_builds(self):
+        # etsformer asserts e_layers == d_layers (encoder/decoder layer
+        # counts must match); exp_parser defaults to e_layers=2, d_layers=1,
+        # so bump d_layers to 2 for this model only via extra_argv.
+        _assert_builds(self, ["etsformer"], extra_argv=["--d_layers", "2"])
