@@ -7,7 +7,8 @@ def exp_parser() -> argparse.ArgumentParser:
     # experiment
     parser.add_argument("--run_name", type=str, default="default_run")
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--epochs", type=int, default=20)
+    parser.add_argument("--epochs", type=int, default=10000,
+                        help="max epochs; training stops earlier via EarlyStopping")
     parser.add_argument("--batch_size", type=int, default=64)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--weight_decay", type=float, default=0.0)
@@ -53,14 +54,10 @@ def exp_parser() -> argparse.ArgumentParser:
     parser.add_argument("--hidden_size", type=int, default=64)
 
     # train-time pre-flight gate
-    parser.add_argument("--max_train_hours", type=float, default=6.0,
-                        help="skip/abort a model if estimated full training "
-                             "time exceeds this many hours")
-    parser.add_argument("--on_slow", type=str, default="skip",
-                        choices=["skip", "abort", "proceed"],
-                        help="action when est. train time exceeds --max_train_hours")
     parser.add_argument("--probe_batches", type=int, default=3,
-                        help="number of training batches timed for the gate estimate")
+                        help="training batches timed by the pre-test tool")
+    parser.add_argument("--early_stop_patience", type=int, default=10,
+                        help="EarlyStopping patience in epochs (monitors val_loss)")
 
     # 표준 모델 공통 기본값
     parser.add_argument("--task_name", type=str, default="long_term_forecast")
@@ -165,9 +162,9 @@ def config_postprocess(config):
             raise ValueError(
                 f"statistic strategy is univariate; got {n_tgt} targets")
 
-    if getattr(config, "max_train_hours", 1.0) <= 0:
-        raise ValueError("max_train_hours must be > 0.")
     if getattr(config, "probe_batches", 1) < 1:
         raise ValueError("probe_batches must be >= 1.")
+    if getattr(config, "early_stop_patience", 1) < 1:
+        raise ValueError("early_stop_patience must be >= 1.")
 
     return config
