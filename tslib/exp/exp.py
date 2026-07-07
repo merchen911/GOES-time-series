@@ -64,10 +64,6 @@ def run_experiment(config):
                                     config, ckpt_path))
 
     comparison = build_comparison(results, config.sort_metric)
-    for r in results:
-        if getattr(r, "skipped", False):
-            print(f"SKIPPED (too slow): {r.model_name} "
-                  f"~{r.est_train_hours:.2f}h — re-include with --on_slow proceed")
     comparison_path = os.path.join(dirs["score"], "comparison.csv")
     comparison.to_csv(comparison_path, index=False)
     return comparison, comparison_path

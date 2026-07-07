@@ -53,7 +53,7 @@ def exp_parser() -> argparse.ArgumentParser:
                         help="AR lag count for statistic strategy")
     parser.add_argument("--hidden_size", type=int, default=64)
 
-    # train-time pre-flight gate
+    # pre-test (probe) + early stopping
     parser.add_argument("--probe_batches", type=int, default=3,
                         help="training batches timed by the pre-test tool")
     parser.add_argument("--early_stop_patience", type=int, default=10,

@@ -11,8 +11,8 @@ one cell at a time.
 Scope defaults reflect the current phase: **direct strategy only, fold 0**
 (recursive and folds 1-4 are added later via ``--strategies`` / ``--folds``).
 ``timesnet`` is excluded from every model set (too slow — see the benchmark
-conditions doc); it stays in the model registry and can still be run by hand
-with ``--on_slow proceed``.
+conditions doc); it stays in the model registry and can be re-added to a
+model set explicitly if desired.
 
 Run it (GPU 1):
 
@@ -44,7 +44,7 @@ XRAY = f"{DATA_DIR}/kasi_swpc_xray_1m.parquet"
 DIRECT_UNI = ["patchtst", "itransformer", "timemixer"]
 DIRECT_MULTI = ["lstm", "patchtst", "itransformer", "timemixer"]
 
-SEQ_LENS = [288, 864, 2016]   # 1 d / 3 d / 7 d — light first, so the first cell (and the gate's sec/batch estimate) lands fast
+SEQ_LENS = [288, 864, 2016]   # 1 d / 3 d / 7 d — light first, so the first/cheapest cells run first
 PRED_LENS = [144, 288]        # 0.5 d / 1 d
 
 # Fixed conditions common to every run (docs/benchmark-conditions.md).
@@ -160,6 +160,16 @@ def comparison_path(cell, runs_root: Path) -> Path:
     return runs_root / run_name / "score" / "comparison.csv"
 
 
+def cell_is_complete(cell, models, runs_root) -> bool:
+    """True iff the cell's comparison.csv exists and already contains every
+    model in `models` (so re-running would add nothing)."""
+    cp = comparison_path(cell, runs_root)
+    if not cp.exists():
+        return False
+    have = set(pd.read_csv(cp)["model"].astype(str))
+    return all(m in have for m in models)
+
+
 def rebuild_master(cells, runs_root: Path, master_path: Path) -> int:
     """Concatenate every cell's comparison.csv that exists into the master
     table, prefixing track/seq_len/pred_len/fold columns. Idempotent: rewrites
@@ -195,7 +205,7 @@ def run_benchmark(runs, epochs, runs_root, master_path, dry_run=False):
             print(f"[{i}/{total}] {run_name} models={models}")
             print("    " + " ".join(cmd))
             continue
-        if cp.exists():
+        if cell_is_complete(cell, models, runs_root):
             print(f"[{i}/{total}] SKIP (done): {run_name}")
             continue
         print(f"[{i}/{total}] RUN: {run_name}\n    {' '.join(cmd)}", flush=True)
