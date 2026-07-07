@@ -17,7 +17,8 @@ class TestBuildComparison(unittest.TestCase):
     def test_dynamic_columns(self):
         df = build_comparison(self._results(), sort_metric="mse")
         self.assertEqual(set(df.columns),
-                         {"strategy", "model", "best_val_loss", "mse", "tss_p_gt10"})
+                         {"strategy", "model", "best_val_loss", "skipped",
+                          "est_train_hours", "mse", "tss_p_gt10"})
 
     def test_sorts_by_metric(self):
         df = build_comparison(self._results(), sort_metric="mse")
@@ -33,7 +34,9 @@ class TestStrategyColumn(unittest.TestCase):
         from tslib.exp.exp import build_comparison
         res = [TrainResult("lstm", 0.5, {"mse": 0.3}, "a.pt", strategy="direct")]
         df = build_comparison(res, sort_metric="mse")
-        self.assertEqual(set(df.columns), {"strategy", "model", "best_val_loss", "mse"})
+        self.assertEqual(set(df.columns),
+                         {"strategy", "model", "best_val_loss", "skipped",
+                          "est_train_hours", "mse"})
         self.assertEqual(df.loc[0, "strategy"], "direct")
 
     def test_merge_across_strategies_nan_last(self):
@@ -47,3 +50,19 @@ class TestStrategyColumn(unittest.TestCase):
         merged = merge_comparisons([a, b], sort_metric="best_val_loss")
         self.assertEqual(list(merged["model"]), ["lstm", "arima"])  # NaN last
         self.assertTrue(math.isnan(merged.iloc[-1]["best_val_loss"]))
+
+
+class TestSkippedColumns(unittest.TestCase):
+    def test_skipped_row_present_and_last(self):
+        from tslib.exp.exp import build_comparison
+        res = [
+            TrainResult("lstm", 0.3, {"mse": 0.2}, "a.pt", strategy="direct"),
+            TrainResult("timesnet", float("nan"), {}, "b.pt",
+                        strategy="direct", skipped=True, est_train_hours=14.0),
+        ]
+        df = build_comparison(res, sort_metric="mse")
+        self.assertIn("skipped", df.columns)
+        self.assertIn("est_train_hours", df.columns)
+        # NaN metric sorts last
+        self.assertEqual(list(df["model"]), ["lstm", "timesnet"])
+        self.assertTrue(bool(df.iloc[-1]["skipped"]))
