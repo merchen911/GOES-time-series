@@ -7,6 +7,36 @@ from tslib.model.registry import MODEL_REGISTRY, register_model
 from tslib.model import build_model
 
 
+def _real_cfg(models, seq_len=96, pred_len=24, channels=1):
+    """Build a real exp_parser config for the given model names (direct
+    strategy). `channels>1` also sets --target_cols so multivariable model
+    variants can be exercised (used by later model-zoo tasks)."""
+    from tslib.configs.config import exp_parser, config_postprocess
+    argv = ["--data_path", "/tmp/x.parquet", "--target_col", "p_gt10",
+            "--seq_len", str(seq_len), "--pred_len", str(pred_len),
+            "--fold_numb", "0", "--forecast_strategy", "direct",
+            "--event_threshold", *(["10"] * channels),
+            "--metrics", "rmse", "mae", "tss", "hss", "pod", "far",
+            "--models", *models]
+    if channels > 1:
+        argv += ["--target_cols"] + [f"col{i}" for i in range(channels)]
+    return config_postprocess(exp_parser().parse_args(argv))
+
+
+def _assert_builds(testcase, names, channels=1):
+    """Construct + forward each named model from a real config; assert the
+    output shape is (batch, pred_len, n_targets)."""
+    cfg = _real_cfg(names, channels=channels)
+    x = torch.zeros(2, cfg.seq_len, channels)
+    tgt = list(range(channels)) if channels > 1 else [0]
+    for name in names:
+        net = build_model(name, cfg, channels, tgt, strategy="direct")
+        net.eval()
+        with torch.no_grad():
+            out = net(x)
+        testcase.assertEqual(tuple(out.shape), (2, cfg.pred_len, len(tgt)), msg=name)
+
+
 class TestModelRegistry(unittest.TestCase):
     def test_legacy_models_registered(self):
         for n in ["lstm", "timesnet", "patchtst"]:
@@ -49,3 +79,26 @@ class TestModelRegistry(unittest.TestCase):
             with torch.no_grad():
                 out = model(x)
             self.assertEqual(tuple(out.shape), (2, 24, 1), msg=name)
+
+
+class TestEnableGroup1(unittest.TestCase):
+    def test_builds(self):
+        _assert_builds(self, ["micn", "nonstationary_transformer", "scinet"])
+
+    def test_segrnn_thuml_blocked_by_model_bug_not_config(self):
+        # segrnn_thuml has all its configs.X flags wired (seg_len, d_model,
+        # dropout, enc_in, pred_len, seq_len, task_name, num_class), but the
+        # in-repo tslib/model/segrnn_thuml.py has diverged from THUML's
+        # SegRNN.py: it adds a padding branch (`if seq_len % seg_len == 0:
+        # seg_num_x += 1`) that increments seg_num_x WITHOUT zero-padding the
+        # tensor, and the condition is inverted (padding is only ever needed
+        # when seq_len is NOT evenly divisible by seg_len). This makes the
+        # `x.reshape(-1, seg_num_x, seg_len)` in `encoder()` shape-invalid for
+        # every seg_len (exhaustively checked seg_len in 1..seq_len, channels
+        # in 1..6, batch in 1..6 at seq_len=96/pred_len=24 -- none succeed).
+        # This is a model-file bug, not a missing config flag, so per this
+        # task's constraints (config.py + test file only) it is left
+        # unregistered from the passing set here and reported rather than
+        # silently worked around.
+        with self.assertRaises(RuntimeError):
+            _assert_builds(self, ["segrnn_thuml"])

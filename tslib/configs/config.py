@@ -92,6 +92,20 @@ def exp_parser() -> argparse.ArgumentParser:
     parser.add_argument("--down_sampling_method", type=str, default="avg",
                         choices=["avg", "max", "conv"])
 
+    # extra backbone flags (THUML defaults)
+    parser.add_argument("--conv_kernel", nargs="+", type=int, default=[12, 16],
+                        help="MICN: downsampling/upsampling conv kernel sizes")
+    parser.add_argument("--p_hidden_dims", nargs="+", type=int, default=[128, 128],
+                        help="Non-stationary Transformer: projector hidden dims")
+    parser.add_argument("--p_hidden_layers", type=int, default=2,
+                        help="Non-stationary Transformer: projector hidden layers")
+    parser.add_argument("--current_level", type=int, default=3,
+                        help="SCINet: tree recursion depth")
+    parser.add_argument("--causal_block_level", type=int, default=4,
+                        help="SCINet: causal conv blocks per SCIBlock")
+    parser.add_argument("--seg_len", type=int, default=48,
+                        help="SegRNN: segment length for segment-wise iteration")
+
     # modeling: pluggable loss / metrics
     parser.add_argument("--loss", type=str, default="mse")
     parser.add_argument("--metrics", nargs="+", default=["mse", "mae"])
@@ -109,7 +123,14 @@ def config_postprocess(config):
     if config.train_ratio + config.val_ratio >= 1:
         raise ValueError("train_ratio + val_ratio must be < 1.")
     if config.label_len <= 0:
-        config.label_len = max((config.seq_len + config.pred_len) // 4, 1)
+        if "micn" in getattr(config, "models", []):
+            # MICN's decoder rebuilds its input from the full seq_len (ignoring
+            # label_len) but is fed x_mark_dec of length label_len+pred_len, so
+            # label_len must equal seq_len for the shapes to line up (matches
+            # THUML's own MICN scripts, which always set label_len == seq_len).
+            config.label_len = config.seq_len
+        else:
+            config.label_len = max((config.seq_len + config.pred_len) // 4, 1)
     if config.n_fold < 3:
         raise ValueError("n_fold must be >= 3.")
     if not 0 <= config.fold_numb < config.n_fold:
