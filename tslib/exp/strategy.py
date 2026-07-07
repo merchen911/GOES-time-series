@@ -54,9 +54,8 @@ class StatisticalRunner:
 def _run_neural(strategy, model_name, data_bundle, config, ckpt_path) -> TrainResult:
     import torch
     import pytorch_lightning as pl
-    from pytorch_lightning.callbacks import ModelCheckpoint
+    from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
     from pytorch_lightning.loggers import CSVLogger
-    from tslib.exp.callbacks import TimingGateCallback
 
     model = build_model(model_name, config, data_bundle.input_size,
                         data_bundle.target_indices, strategy=strategy)
@@ -66,29 +65,31 @@ def _run_neural(strategy, model_name, data_bundle, config, ckpt_path) -> TrainRe
         target_cols=list(getattr(data_bundle, "target_cols", []) or []))
     module = ForecastModule(model, config, ctx, strategy=strategy)
 
+    n_train_batches = len(data_bundle.train_loader)
+    if n_train_batches < 200:
+        print(f"[warn] {model_name}: {n_train_batches} train steps/epoch "
+              f"(below the 200 floor)")
+
     ckpt_dir = os.path.dirname(ckpt_path) or "."
     ckpt_name = os.path.splitext(os.path.basename(ckpt_path))[0]
     ckpt_cb = ModelCheckpoint(monitor="val_loss", mode="min", save_top_k=1,
                               dirpath=ckpt_dir, filename=ckpt_name)
+    early_cb = EarlyStopping(monitor="val_loss", mode="min",
+                             patience=config.early_stop_patience)
     accelerator = "gpu" if torch.cuda.is_available() else "cpu"
     trainer = pl.Trainer(
         max_epochs=config.epochs, accelerator=accelerator, devices=1,
-        callbacks=[ckpt_cb, TimingGateCallback(config)],
+        callbacks=[ckpt_cb, early_cb],
         logger=CSVLogger(save_dir=ckpt_dir, name="lightning"),
         enable_progress_bar=False, enable_model_summary=False)
     trainer.fit(module, data_bundle.train_loader, data_bundle.val_loader)
-
-    if module._gate_skipped:
-        return TrainResult(model_name=model_name, best_val_loss=float("nan"),
-                           metrics={}, ckpt_path=ckpt_path, strategy=strategy,
-                           skipped=True, est_train_hours=module._est_train_hours)
 
     trainer.test(module, data_bundle.test_loader, ckpt_path="best")
     best = (float(ckpt_cb.best_model_score)
             if ckpt_cb.best_model_score is not None else float("nan"))
     return TrainResult(model_name=model_name, best_val_loss=best,
                        metrics=module.test_metrics, ckpt_path=ckpt_path,
-                       strategy=strategy, est_train_hours=module._est_train_hours)
+                       strategy=strategy)
 
 
 def run_strategy(strategy, model_name, data_bundle, config, ckpt_path) -> TrainResult:

@@ -91,53 +91,12 @@ class TestNeuralStrategyLightning(unittest.TestCase):
             cfg = SimpleNamespace(lr=1e-3, weight_decay=0.0, epochs=1, loss="mse",
                                   metrics=["mse"], transform="log10",
                                   event_threshold=None, seq_len=4, pred_len=2,
-                                  label_len=0, max_train_hours=1e6,
-                                  on_slow="proceed", probe_batches=2)
+                                  label_len=0, early_stop_patience=10)
             with tempfile.TemporaryDirectory() as d:
                 res = strat.run_strategy("direct", "toy", bundle, cfg,
                                          os.path.join(d, "toy.pt"))
             self.assertEqual(res.strategy, "direct")
             self.assertFalse(res.skipped)
             self.assertIn("mse", res.metrics)
-        finally:
-            strat.build_model = orig
-
-
-class TestGateSkipInStrategy(unittest.TestCase):
-    def test_slow_model_skipped(self):
-        import tempfile, os
-        import torch
-        from torch.utils.data import DataLoader, TensorDataset
-        from types import SimpleNamespace
-        import tslib.exp.strategy as strat
-
-        class _Toy(torch.nn.Module):
-            def __init__(self):
-                super().__init__()
-                self.p = torch.nn.Parameter(torch.zeros(1))
-
-            def forward(self, x):
-                b = x.shape[0]
-                return torch.zeros(b, 2, 1, device=self.p.device) + self.p
-
-        orig = strat.build_model
-        strat.build_model = lambda *a, **k: _Toy()
-        try:
-            x = torch.zeros(16, 4, 1)
-            y = torch.full((16, 2, 1), 2.0)
-            loader = DataLoader(TensorDataset(x, y), batch_size=4)
-            bundle = SimpleNamespace(train_loader=loader, val_loader=loader,
-                                     test_loader=loader, input_size=1,
-                                     target_indices=[0], target_cols=["p_gt10"])
-            cfg = SimpleNamespace(lr=1e-3, weight_decay=0.0, epochs=1, loss="mse",
-                                  metrics=["mse"], transform="log10",
-                                  event_threshold=None, seq_len=4, pred_len=2,
-                                  label_len=0, max_train_hours=1e-12,
-                                  on_slow="skip", probe_batches=2)
-            with tempfile.TemporaryDirectory() as d:
-                res = strat.run_strategy("direct", "toy", bundle, cfg,
-                                         os.path.join(d, "toy.pt"))
-            self.assertTrue(res.skipped)
-            self.assertGreater(res.est_train_hours, 0.0)
         finally:
             strat.build_model = orig
