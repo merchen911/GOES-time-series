@@ -140,3 +140,28 @@ class TestStatisticStrategyConfig(unittest.TestCase):
                         "--target_cols", "x", "y")
         with self.assertRaises(ValueError):
             config_postprocess(c)
+
+
+class TestGateFlags(unittest.TestCase):
+    def _base_argv(self, *extra):
+        argv = ["--data_path", "x.parquet", "--target_col", "p_gt10", *extra]
+        from tslib.configs.config import exp_parser
+        return exp_parser().parse_args(argv)
+
+    def test_gate_defaults(self):
+        cfg = self._base_argv()
+        self.assertEqual(cfg.max_train_hours, 6.0)
+        self.assertEqual(cfg.on_slow, "skip")
+        self.assertEqual(cfg.probe_batches, 3)
+
+    def test_rejects_nonpositive_max_train_hours(self):
+        from tslib.configs.config import config_postprocess
+        cfg = self._base_argv("--max_train_hours", "0")
+        with self.assertRaises(ValueError):
+            config_postprocess(cfg)
+
+    def test_rejects_probe_batches_below_one(self):
+        from tslib.configs.config import config_postprocess
+        cfg = self._base_argv("--probe_batches", "0")
+        with self.assertRaises(ValueError):
+            config_postprocess(cfg)
