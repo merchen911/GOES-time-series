@@ -5,9 +5,19 @@ import copy
 from torch import nn
 
 
-def _build_time_mark(batch: int, length: int, device):
+# THUML's freq -> calendar-feature-count convention (see data_provider/
+# timefeatures.py / models/TiDE.py). Floored at 4 so TemporalEmbedding's
+# fixed month/day/weekday/hour indices (0-3) are always present regardless
+# of freq.
+_TIME_FEAT_DIM = {'h': 4, 't': 5, 's': 6, 'm': 1, 'a': 1, 'w': 2, 'd': 3, 'b': 3}
+
+
+def _build_time_mark(batch: int, length: int, device, n_features: int = 4):
     import torch
-    return torch.zeros((batch, length, 5), dtype=torch.long, device=device)
+    # float32 (not long): TemporalEmbedding-style consumers cast internally
+    # via `.long()`, but some models (e.g. TiDE) feed the mark straight into
+    # an nn.Linear and require a float dtype.
+    return torch.zeros((batch, length, n_features), dtype=torch.float32, device=device)
 
 
 def _call_base(base_model, config, x, dec_len: int):
@@ -15,9 +25,10 @@ def _call_base(base_model, config, x, dec_len: int):
     and call a legacy-style 4-arg base model. Returns its raw output."""
     import torch
     b, dev = x.shape[0], x.device
-    x_mark_enc = _build_time_mark(b, config.seq_len, dev)
+    n_feat = max(_TIME_FEAT_DIM.get(getattr(config, "freq", "h"), 4), 4)
+    x_mark_enc = _build_time_mark(b, config.seq_len, dev, n_feat)
     x_dec = torch.zeros((b, config.label_len + dec_len, x.shape[-1]), device=dev)
-    x_mark_dec = _build_time_mark(b, config.label_len + dec_len, dev)
+    x_mark_dec = _build_time_mark(b, config.label_len + dec_len, dev, n_feat)
     return base_model(x, x_mark_enc, x_dec, x_mark_dec)
 
 
