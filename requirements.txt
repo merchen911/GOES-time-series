@@ -1,3 +1,5 @@
 numpy
 pandas
 torch
+statsmodels
+pytorch_lightning
