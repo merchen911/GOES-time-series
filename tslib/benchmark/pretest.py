@@ -136,6 +136,15 @@ def main(argv=None):
             except Exception as e:  # bad model/probe: reject, keep going
                 print(f"  {cell['track']} {model}: probe failed ({e}) — rejected")
                 rejected += 1
+            finally:
+                # Release the probed model (and any CUDA-resident copy of it)
+                # before moving to the next model, otherwise GPU memory
+                # accumulates across probes and can OOM later in the run.
+                import torch
+                if "net" in locals():
+                    del net
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
 
     params = {"nominal_epochs": args.nominal_epochs,
               "threshold_hours": args.threshold_hours,

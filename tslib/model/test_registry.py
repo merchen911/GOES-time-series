@@ -129,3 +129,16 @@ class TestEtsformer(unittest.TestCase):
         # counts must match); exp_parser defaults to e_layers=2, d_layers=1,
         # so bump d_layers to 2 for this model only via extra_argv.
         _assert_builds(self, ["etsformer"], extra_argv=["--d_layers", "2"])
+
+
+class TestAllRegistryModelsBuild(unittest.TestCase):
+    def test_every_registered_model_builds_and_forwards(self):
+        # --d_layers 2 is required by etsformer (see TestEtsformer above).
+        # Applying it to every model in this sweep is safe: micn, scinet,
+        # nonstationary_transformer, and tide also read d_layers as an
+        # architecture width (number of decomp/stack/decoder layers), and
+        # all four build and forward correctly with d_layers=2 — confirmed
+        # empirically before adding this test. Every other registered model
+        # ignores d_layers entirely.
+        from tslib.model.registry import MODEL_REGISTRY
+        _assert_builds(self, sorted(MODEL_REGISTRY), extra_argv=["--d_layers", "2"])
