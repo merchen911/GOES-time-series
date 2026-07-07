@@ -44,9 +44,10 @@ class TestBuildCmd(unittest.TestCase):
         self.assertEqual(cmd[cmd.index("--epochs") + 1], "30")
         self.assertEqual(cmd[cmd.index("--run_name") + 1],
                          "bench/uni_a_seq288_pred144_f0_direct")
-        # gate defaults present
-        self.assertEqual(cmd[cmd.index("--max_train_hours") + 1], "6.0")
-        self.assertEqual(cmd[cmd.index("--on_slow") + 1], "skip")
+        # gate flags removed; early-stop present
+        self.assertNotIn("--max_train_hours", cmd)
+        self.assertEqual(cmd[cmd.index("--early_stop_patience") + 1], "10")
+        self.assertEqual(cmd[cmd.index("--epochs") + 1], "30")
         # univariate has no channels
         self.assertNotIn("--channels", cmd)
 
@@ -95,6 +96,31 @@ class TestRebuildMaster(unittest.TestCase):
             n = driver.rebuild_master([cell], runs_root, master)
             self.assertEqual(n, 0)
             self.assertFalse(master.exists())
+
+
+class TestManifest(unittest.TestCase):
+    def test_cells_from_manifest_groups_models(self):
+        manifest = {"approved": [
+            {"track": "uni_a", "seq_len": 288, "pred_len": 144, "fold": 0,
+             "strategy": "direct", "model": "patchtst"},
+            {"track": "uni_a", "seq_len": 288, "pred_len": 144, "fold": 0,
+             "strategy": "direct", "model": "timemixer"},
+            {"track": "uni_b", "seq_len": 288, "pred_len": 144, "fold": 0,
+             "strategy": "direct", "model": "patchtst"},
+        ]}
+        out = driver.cells_from_manifest(manifest)
+        self.assertEqual(len(out), 2)  # two distinct cells
+        cell0, models0 = out[0]
+        self.assertEqual(cell0["track"], "uni_a")
+        self.assertEqual(models0, ["patchtst", "timemixer"])
+
+    def test_build_cmd_honours_explicit_models(self):
+        cell = {"track": "uni_a", "seq_len": 288, "pred_len": 144,
+                "fold": 0, "strategy": "direct"}
+        cmd = driver.build_cmd(cell, epochs=30, models=["timemixer"])
+        mi = cmd.index("--models")
+        self.assertEqual(cmd[mi + 1], "timemixer")
+        self.assertNotIn("patchtst", cmd)
 
 
 if __name__ == "__main__":
