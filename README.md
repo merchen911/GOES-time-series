@@ -59,13 +59,13 @@ Run one or more models and compare them:
 # Univariate: proton p_gt10, 7-day look-back -> 1-day forecast
 python main.py --data_path $SW_DATA_DIR/kasi_swpc_particle_5m_v02.parquet \
     --target_col p_gt10 --seq_len 2016 --pred_len 288 \
-    --n_fold 5 --fold_numb 0 --models lstm timesnet
+    --n_fold 5 --fold_numb 0 --models lstm patchtst
 
 # Multivariate input -> single target (proton + X-ray in, proton out)
 python main.py \
     --channels $SW_DATA_DIR/kasi_swpc_particle_5m_v02.parquet:p_gt10 \
                $SW_DATA_DIR/kasi_swpc_xray_1m_v02.parquet:xrs_long \
-    --target_cols p_gt10 --seq_len 864 --pred_len 288 --models lstm timesnet
+    --target_cols p_gt10 --seq_len 864 --pred_len 288 --models lstm patchtst
 
 # Multivariate input -> multi-target (forecast both channels)
 python main.py --channels $SW_DATA_DIR/...:p_gt10 $SW_DATA_DIR/...:xrs_long \

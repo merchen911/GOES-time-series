@@ -42,7 +42,7 @@ def exp_parser() -> argparse.ArgumentParser:
                         help="min native samples per resample bin to keep it")
 
     # model comparison
-    parser.add_argument("--models", nargs="+", default=["lstm", "timesnet"])
+    parser.add_argument("--models", nargs="+", default=["lstm", "patchtst"])
     parser.add_argument("--forecast_strategy", type=str, default="direct",
                         choices=["direct", "recursive", "statistic"],
                         help="how the forecast horizon is produced")

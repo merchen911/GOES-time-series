@@ -43,12 +43,16 @@ Every neural run goes through the v003 Lightning train-time gate
 (`TimingGateCallback`), which probes the first few training batches and
 extrapolates a full-training-time estimate before letting a model run to
 completion. Defaults used here (not overridden in the example commands
-below): `--max_train_hours 6.0`, `--on_slow skip`, `--probe_batches 3`. In
-practice this means **`timesnet`-class models at the long `seq_len`/`pred_len`
-sweep points may be auto-skipped** (excluded from `comparison.csv`, with a
-`SKIPPED (too slow): ...` line on stdout) rather than silently eating the
-whole benchmark's time budget. If a skipped `timesnet` cell needs to be
-filled in anyway, re-run that specific invocation with `--on_slow proceed`.
+below): `--max_train_hours 6.0`, `--on_slow skip`, `--probe_batches 3`.
+
+**`timesnet` is excluded from this benchmark entirely** — it is far too slow
+(it alone took ~14.5 h for 3 epochs on the full dataset in the pilot), so it
+is dropped from every model set below. The gate remains as a safety net for
+the rest: any remaining model estimated to exceed the limit at the long
+`seq_len`/`pred_len` sweep points is auto-skipped (excluded from
+`comparison.csv`, with a `SKIPPED (too slow): ...` line on stdout) rather
+than silently eating the whole benchmark's time budget. To force a skipped
+cell to run anyway, re-run that specific invocation with `--on_slow proceed`.
 See `docs/lightning-migration.md` for the full gate mechanics and the other
 `--on_slow` policies.
 
@@ -64,15 +68,15 @@ See `docs/lightning-migration.md` for the full gate mechanics and the other
 | model | strategy | why |
 |---|---|---|
 | `lstm` | **recursive** | RNN rolled one step at a time |
-| `timesnet` | direct | one-shot many-to-many |
 | `patchtst` | direct | one-shot |
 | `itransformer` | direct | one-shot |
 | `timemixer` | direct | one-shot |
 
-`etsformer` excluded (pre-existing broken `layers` imports). Because `--forecast_strategy`
+`timesnet` excluded (too slow — see the train-time gate note above). `etsformer`
+excluded (pre-existing broken `layers` imports). Because `--forecast_strategy`
 is run-level, each (track, seq_len, pred_len) cell is **two invocations** — one
 `--forecast_strategy recursive --models lstm`, one `--forecast_strategy direct --models
-timesnet patchtst itransformer timemixer` — merged with `merge_comparisons`.
+patchtst itransformer timemixer` — merged with `merge_comparisons`.
 
 ## Event thresholds (physical units → log10 auto-converted by MetricContext)
 
@@ -92,9 +96,9 @@ Two independent sub-tracks (single input channel = the target):
 
 For **each** sub-track × seq_len `{2016,864,288}` × pred_len `{144,288}`:
 - `recursive`: `lstm` (1 channel ⇒ target == all-channels holds)
-- `direct`: `timesnet patchtst itransformer timemixer`
+- `direct`: `patchtst itransformer timemixer`
 
-Merge the two runs per cell → one table ranking all 5 model-runs by `strategy`+`model`.
+Merge the two runs per cell → one table ranking all 4 model-runs by `strategy`+`model`.
 
 ## Track 2 — Multivariable (direct, multi-target)
 
@@ -103,7 +107,7 @@ Merge the two runs per cell → one table ranking all 5 model-runs by `strategy`
 - `--event_threshold 10 1e-5` (aligned to `--target_cols p_gt10 xrs_long`)
 
 For **each** seq_len `{2016,864,288}` × pred_len `{144,288}`:
-- `direct`: `lstm timesnet patchtst itransformer timemixer`
+- `direct`: `lstm patchtst itransformer timemixer`
 
 > **Note:** here `lstm` runs **direct**, not recursive — recursive needs targets == all
 > input channels (2 ≠ 4), so it is not applicable to this multi-target multivariable config.
@@ -132,20 +136,20 @@ CUDA_VISIBLE_DEVICES=1 python main.py --data_path $P --target_col p_gt10 $COMMON
   --event_threshold 10 --forecast_strategy recursive --models lstm
 CUDA_VISIBLE_DEVICES=1 python main.py --data_path $P --target_col p_gt10 $COMMON \
   --event_threshold 10 --forecast_strategy direct \
-  --models timesnet patchtst itransformer timemixer
+  --models patchtst itransformer timemixer
 
 # --- UNI-B: xrs_long (swap file/target/threshold, same two-run pattern) ---
 CUDA_VISIBLE_DEVICES=1 python main.py --data_path $X --target_col xrs_long $COMMON \
   --event_threshold 1e-5 --forecast_strategy recursive --models lstm
 CUDA_VISIBLE_DEVICES=1 python main.py --data_path $X --target_col xrs_long $COMMON \
   --event_threshold 1e-5 --forecast_strategy direct \
-  --models timesnet patchtst itransformer timemixer
+  --models patchtst itransformer timemixer
 
 # --- Track 2: multivariable, multi-target (direct, lstm included as direct) ---
 CUDA_VISIBLE_DEVICES=1 python main.py --data_path $P --target_col p_gt10 $COMMON \
   --channels $P:p_gt10 $P:p_gt100 $X:xrs_long $X:xrs_short \
   --target_cols p_gt10 xrs_long --event_threshold 10 1e-5 \
-  --forecast_strategy direct --models lstm timesnet patchtst itransformer timemixer
+  --forecast_strategy direct --models lstm patchtst itransformer timemixer
 ```
 
 (Sweep `--seq_len {2016,864,288}` and `--pred_len {144,288}` over these. `--data_path`/
@@ -154,9 +158,9 @@ channel set, so they act only as the required placeholder.)
 
 ## Run matrix size (per fold, current scope)
 
-- Track 1: 2 sub-tracks × 3 seq_len × 2 pred_len × (1 recursive + 4 direct) = **60 model-runs**
-- Track 2: 3 seq_len × 2 pred_len × 5 direct = **30 model-runs**
-- Total ≈ **90 model-runs/fold** → ×5 folds ≈ **450**. Pilot fold 0 first.
+- Track 1: 2 sub-tracks × 3 seq_len × 2 pred_len × (1 recursive + 3 direct) = **48 model-runs**
+- Track 2: 3 seq_len × 2 pred_len × 4 direct = **24 model-runs**
+- Total ≈ **72 model-runs/fold** → ×5 folds ≈ **360**. Pilot fold 0 first.
 
 ## Deferred: statistic (later, separate)
 
