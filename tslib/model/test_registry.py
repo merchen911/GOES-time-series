@@ -133,12 +133,12 @@ class TestEtsformer(unittest.TestCase):
 
 class TestAllRegistryModelsBuild(unittest.TestCase):
     def test_every_registered_model_builds_and_forwards(self):
-        # --d_layers 2 is required by etsformer (see TestEtsformer above).
-        # Applying it to every model in this sweep is safe: micn, scinet,
-        # nonstationary_transformer, and tide also read d_layers as an
-        # architecture width (number of decomp/stack/decoder layers), and
-        # all four build and forward correctly with d_layers=2 — confirmed
-        # empirically before adding this test. Every other registered model
-        # ignores d_layers entirely.
+        # config_postprocess now auto-reconciles etsformer's d_layers to
+        # match e_layers (see config.py), so this sweep runs at real
+        # defaults without needing to force --d_layers. Filter out
+        # non-real entries (e.g. "dummy_reg_model" registered by
+        # TestModelRegistry.test_register_and_lookup) so another test's
+        # registrations can't break this sweep.
         from tslib.model.registry import MODEL_REGISTRY
-        _assert_builds(self, sorted(MODEL_REGISTRY), extra_argv=["--d_layers", "2"])
+        names = [n for n in sorted(MODEL_REGISTRY) if not n.startswith("dummy")]
+        _assert_builds(self, names)

@@ -140,7 +140,6 @@ def main(argv=None):
                 # Release the probed model (and any CUDA-resident copy of it)
                 # before moving to the next model, otherwise GPU memory
                 # accumulates across probes and can OOM later in the run.
-                import torch
                 if "net" in locals():
                     del net
                 if torch.cuda.is_available():
