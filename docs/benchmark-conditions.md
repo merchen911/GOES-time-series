@@ -37,6 +37,21 @@ sees GPU 1 as `cuda:0`). Do not use empty `CUDA_VISIBLE_DEVICES=""` (that disabl
 | `--seed` | `42` (repeat 3 seeds for variance if time allows) |
 | neural HP | `--epochs 30 --batch_size 64 --lr 1e-3 --d_model 128 --num_layers 2 --dropout 0.1` |
 
+### Train-time gate
+
+Every neural run goes through the v003 Lightning train-time gate
+(`TimingGateCallback`), which probes the first few training batches and
+extrapolates a full-training-time estimate before letting a model run to
+completion. Defaults used here (not overridden in the example commands
+below): `--max_train_hours 6.0`, `--on_slow skip`, `--probe_batches 3`. In
+practice this means **`timesnet`-class models at the long `seq_len`/`pred_len`
+sweep points may be auto-skipped** (excluded from `comparison.csv`, with a
+`SKIPPED (too slow): ...` line on stdout) rather than silently eating the
+whole benchmark's time budget. If a skipped `timesnet` cell needs to be
+filled in anyway, re-run that specific invocation with `--on_slow proceed`.
+See `docs/lightning-migration.md` for the full gate mechanics and the other
+`--on_slow` policies.
+
 > **Deferred (note only):** `--pred_len 864` (3-day horizon) — run later once the
 > 0.5 d / 1 d horizons are validated. The 3-day recursive rollout is the heaviest config.
 > **Deferred:** the `statistic` strategy (ARIMA/AR/Theta) — separate later benchmark; see
