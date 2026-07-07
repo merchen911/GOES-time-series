@@ -85,20 +85,18 @@ class TestEnableGroup1(unittest.TestCase):
     def test_builds(self):
         _assert_builds(self, ["micn", "nonstationary_transformer", "scinet"])
 
-    def test_segrnn_thuml_blocked_by_model_bug_not_config(self):
-        # segrnn_thuml has all its configs.X flags wired (seg_len, d_model,
-        # dropout, enc_in, pred_len, seq_len, task_name, num_class), but the
-        # in-repo tslib/model/segrnn_thuml.py has diverged from THUML's
-        # SegRNN.py: it adds a padding branch (`if seq_len % seg_len == 0:
-        # seg_num_x += 1`) that increments seg_num_x WITHOUT zero-padding the
-        # tensor, and the condition is inverted (padding is only ever needed
-        # when seq_len is NOT evenly divisible by seg_len). This makes the
-        # `x.reshape(-1, seg_num_x, seg_len)` in `encoder()` shape-invalid for
-        # every seg_len (exhaustively checked seg_len in 1..seq_len, channels
-        # in 1..6, batch in 1..6 at seq_len=96/pred_len=24 -- none succeed).
-        # This is a model-file bug, not a missing config flag, so per this
-        # task's constraints (config.py + test file only) it is left
-        # unregistered from the passing set here and reported rather than
-        # silently worked around.
-        with self.assertRaises(RuntimeError):
-            _assert_builds(self, ["segrnn_thuml"])
+
+class TestEnableGroup2(unittest.TestCase):
+    def test_builds(self):
+        _assert_builds(self, ["patchmixer", "segrnn", "xpatch"])
+
+    def test_segrnn_thuml_builds(self):
+        # tslib/model/segrnn_thuml.py previously diverged from THUML's
+        # SegRNN.py: encoder() had a padding branch (`if seq_len % seg_len ==
+        # 0: seg_num_x += 1`) that incremented seg_num_x WITHOUT zero-padding
+        # the tensor, and the condition was inverted (padding is only ever
+        # needed when seq_len is NOT evenly divisible by seg_len), making the
+        # `x.reshape(-1, seg_num_x, seg_len)` shape-invalid. Fixed to match
+        # upstream (which has no such branch and instead requires seg_len to
+        # evenly divide seq_len). Now builds like any other registered model.
+        _assert_builds(self, ["segrnn_thuml"])
