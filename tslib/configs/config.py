@@ -119,8 +119,6 @@ def exp_parser() -> argparse.ArgumentParser:
                         help="PatchMixer: dropout in the prediction heads")
     parser.add_argument("--mixer_kernel_size", type=int, default=8,
                         help="PatchMixer: depthwise conv kernel size")
-    parser.add_argument("--a", type=int, default=2,
-                        help="PatchMixer: PatchMixerLayer output channel count")
     parser.add_argument("--rnn_type", type=str, default="gru",
                         choices=["rnn", "gru", "lstm"],
                         help="SegRNN: recurrent cell type")
@@ -155,15 +153,21 @@ def config_postprocess(config):
         raise ValueError("val_ratio must be between 0 and 1.")
     if config.train_ratio + config.val_ratio >= 1:
         raise ValueError("train_ratio + val_ratio must be < 1.")
-    if config.label_len <= 0:
-        if "micn" in getattr(config, "models", []):
-            # MICN's decoder rebuilds its input from the full seq_len (ignoring
-            # label_len) but is fed x_mark_dec of length label_len+pred_len, so
-            # label_len must equal seq_len for the shapes to line up (matches
-            # THUML's own MICN scripts, which always set label_len == seq_len).
-            config.label_len = config.seq_len
-        else:
-            config.label_len = max((config.seq_len + config.pred_len) // 4, 1)
+    if "micn" in getattr(config, "models", []):
+        # MICN's decoder rebuilds its input from the full seq_len (ignoring
+        # label_len) but is fed x_mark_dec of length label_len+pred_len, so
+        # label_len must equal seq_len for the shapes to line up (matches
+        # THUML's own MICN scripts, which always set label_len == seq_len).
+        # This must hold unconditionally, even if the user passed an explicit
+        # --label_len, since any other value breaks MICN's shapes.
+        config.label_len = config.seq_len
+    elif config.label_len <= 0:
+        config.label_len = max((config.seq_len + config.pred_len) // 4, 1)
+    if "etsformer" in getattr(config, "models", []):
+        # etsformer asserts e_layers == d_layers internally; auto-reconcile so
+        # it is runnable from defaults (e_layers=2, d_layers=1) without
+        # requiring the caller to pass --d_layers explicitly.
+        config.d_layers = config.e_layers
     if config.n_fold < 3:
         raise ValueError("n_fold must be >= 3.")
     if not 0 <= config.fold_numb < config.n_fold:

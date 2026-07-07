@@ -102,6 +102,9 @@ class Model(nn.Module):
         x = self.tokenEmb(x_enc)
         bias = x
         # [B, N, T, D]
+        # Verbatim upstream THUML comparison (originally a string flag); this
+        # repo's --channel_independence is int-typed, so this branch is
+        # always False here and MLP_channel is inert. Kept as a faithful port.
         if self.channel_independence == '0':
             x = self.MLP_channel(x, B, N, T)
         # [B, N, T, D]

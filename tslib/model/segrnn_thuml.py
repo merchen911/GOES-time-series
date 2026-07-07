@@ -87,7 +87,6 @@ class Model(nn.Module):
         y = self.predict(hy).view(-1, self.enc_in, self.pred_len)
 
         # permute and denorm
-        print(y.shape, seq_last.shape)
         y = y.permute(0, 2, 1) + seq_last
         return y
 
