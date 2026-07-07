@@ -52,6 +52,16 @@ def exp_parser() -> argparse.ArgumentParser:
                         help="AR lag count for statistic strategy")
     parser.add_argument("--hidden_size", type=int, default=64)
 
+    # train-time pre-flight gate
+    parser.add_argument("--max_train_hours", type=float, default=6.0,
+                        help="skip/abort a model if estimated full training "
+                             "time exceeds this many hours")
+    parser.add_argument("--on_slow", type=str, default="skip",
+                        choices=["skip", "abort", "proceed"],
+                        help="action when est. train time exceeds --max_train_hours")
+    parser.add_argument("--probe_batches", type=int, default=3,
+                        help="number of training batches timed for the gate estimate")
+
     # 표준 모델 공통 기본값
     parser.add_argument("--task_name", type=str, default="long_term_forecast")
     parser.add_argument("--label_len", type=int, default=0)
@@ -141,5 +151,10 @@ def config_postprocess(config):
         if n_tgt != 1:
             raise ValueError(
                 f"statistic strategy is univariate; got {n_tgt} targets")
+
+    if getattr(config, "max_train_hours", 1.0) <= 0:
+        raise ValueError("max_train_hours must be > 0.")
+    if getattr(config, "probe_batches", 1) < 1:
+        raise ValueError("probe_batches must be >= 1.")
 
     return config
