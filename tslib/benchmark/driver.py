@@ -48,8 +48,10 @@ XRAY = f"{DATA_DIR}/kasi_swpc_xray_1m.parquet"
 # redundant with segrnn_thuml.
 _FAST = ["dlinear", "segrnn_thuml", "tsmixer", "patchmixer", "tide",
          "xpatch", "patchtst", "frets", "itransformer"]
-DIRECT_UNI = list(_FAST)               # lstm runs recursive in Track 1, not here
-DIRECT_MULTI = ["lstm"] + list(_FAST)  # lstm runs direct in the multi-target track
+# lstm runs recursive in every track (its natural mode); the fast tier are the
+# direct backbones. Same direct set for univariate and multivariable tracks.
+DIRECT_UNI = list(_FAST)
+DIRECT_MULTI = list(_FAST)
 
 SEQ_LENS = [288, 864, 2016]   # 1 d / 3 d / 7 d — light first, so the first/cheapest cells run first
 PRED_LENS = [144, 288]        # 0.5 d / 1 d
@@ -67,8 +69,10 @@ FIXED = [
     "--early_stop_patience", "10",
 ]
 
-# Per-track definitions. ``recursive_models`` is empty where recursive is not
-# applicable (multivariable multi-target: targets != all channels).
+# Per-track definitions. The multivariable track forecasts exactly its 2 input
+# channels (p_gt10 + xrs_long), so targets == channels and recursive applies to
+# it too (recursive lstm rolls the full 2-channel frame forward). p_gt100 /
+# xrs_short are intentionally not modelled.
 TRACKS = {
     "uni_a": {
         "data_path": PARTICLE, "target_col": "p_gt10",
@@ -84,11 +88,10 @@ TRACKS = {
     },
     "multi": {
         "data_path": PARTICLE, "target_col": "p_gt10",  # required placeholder; --channels drives loading
-        "channels": [f"{PARTICLE}:p_gt10", f"{PARTICLE}:p_gt100",
-                     f"{XRAY}:xrs_long", f"{XRAY}:xrs_short"],
+        "channels": [f"{PARTICLE}:p_gt10", f"{XRAY}:xrs_long"],
         "target_cols": ["p_gt10", "xrs_long"],
         "event_threshold": ["10", "1e-5"], "sort_metric": "tss_p_gt10",
-        "direct_models": DIRECT_MULTI, "recursive_models": [],
+        "direct_models": DIRECT_MULTI, "recursive_models": ["lstm"],
     },
 }
 
