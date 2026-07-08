@@ -131,6 +131,20 @@ class TestEtsformer(unittest.TestCase):
         _assert_builds(self, ["etsformer"], extra_argv=["--d_layers", "2"])
 
 
+class TestEtsformerGPU(unittest.TestCase):
+    @unittest.skipUnless(torch.cuda.is_available(), "requires CUDA")
+    def test_etsformer_forwards_on_gpu(self):
+        # etsformer's FourierLayer indexed a CPU freq tensor with GPU indices;
+        # confirm it now forwards end-to-end on CUDA (skips on CPU-only hosts).
+        cfg = _real_cfg(["etsformer"], extra_argv=["--d_layers", "2"])
+        net = build_model("etsformer", cfg, 1, [0], strategy="direct").cuda()
+        net.eval()
+        with torch.no_grad():
+            out = net(torch.zeros(2, cfg.seq_len, 1, device="cuda"))
+        self.assertEqual(tuple(out.shape), (2, cfg.pred_len, 1))
+        self.assertEqual(out.device.type, "cuda")
+
+
 class TestAllRegistryModelsBuild(unittest.TestCase):
     def test_every_registered_model_builds_and_forwards(self):
         # config_postprocess now auto-reconciles etsformer's d_layers to
