@@ -78,18 +78,25 @@ full pre-test/manifest and early-stopping mechanics.
 
 ## Strategy assignment (per model — fixed)
 
-| model | strategy | why |
-|---|---|---|
-| `lstm` | **recursive** | RNN rolled one step at a time |
-| `patchtst` | direct | one-shot |
-| `itransformer` | direct | one-shot |
-| `timemixer` | direct | one-shot |
+Model set = the **fast tier**, selected by a direct-mode per-epoch speed probe
+(2026-07-07) across every seq_len/pred_len combo. A model is included only if it
+stays under ~10 min/epoch in **every** cell.
 
-`timesnet` excluded (too slow — see "Pre-test + early stopping" above). `etsformer`
-excluded (pre-existing broken `layers` imports). Because `--forecast_strategy`
-is run-level, each (track, seq_len, pred_len) cell is **two invocations** — one
-`--forecast_strategy recursive --models lstm`, one `--forecast_strategy direct --models
-patchtst itransformer timemixer` — merged with `merge_comparisons`.
+- **Direct univariate** (`DIRECT_UNI`, 9): `dlinear`, `segrnn_thuml`, `tsmixer`,
+  `patchmixer`, `tide`, `xpatch`, `patchtst`, `frets`, `itransformer`.
+- **Direct multivariable** (`DIRECT_MULTI`, 10): the 9 above **+ `lstm`** (lstm
+  runs direct in the multi-target track).
+- **Recursive**: `lstm` (Track 1 only).
+
+**Excluded (≥10 min/epoch in ≥1 combo):** `timemixer`, `etsformer`, `micn`,
+`scinet`, `timesnet`, and `nonstationary_transformer` (also OOMs at
+`seq_len ≥ 864` on a 12 GB GPU). `segrnn` omitted as redundant with
+`segrnn_thuml`. All excluded models remain registered and can be run explicitly.
+
+Because `--forecast_strategy` is run-level, each univariate cell is **two
+invocations** — one `recursive --models lstm`, one `direct --models <DIRECT_UNI>`
+— merged with `merge_comparisons`. In practice the driver
+(`tslib.benchmark.driver`) builds these model lists automatically.
 
 ## Event thresholds (physical units → log10 auto-converted by MetricContext)
 
@@ -109,9 +116,9 @@ Two independent sub-tracks (single input channel = the target):
 
 For **each** sub-track × seq_len `{2016,864,288}` × pred_len `{144,288}`:
 - `recursive`: `lstm` (1 channel ⇒ target == all-channels holds)
-- `direct`: `patchtst itransformer timemixer`
+- `direct`: `dlinear segrnn_thuml tsmixer patchmixer tide xpatch patchtst frets itransformer` (DIRECT_UNI, 9)
 
-Merge the two runs per cell → one table ranking all 4 model-runs by `strategy`+`model`.
+Merge the two runs per cell → one table ranking all 10 model-runs by `strategy`+`model`.
 
 ## Track 2 — Multivariable (direct, multi-target)
 
@@ -120,7 +127,7 @@ Merge the two runs per cell → one table ranking all 4 model-runs by `strategy`
 - `--event_threshold 10 1e-5` (aligned to `--target_cols p_gt10 xrs_long`)
 
 For **each** seq_len `{2016,864,288}` × pred_len `{144,288}`:
-- `direct`: `lstm patchtst itransformer timemixer`
+- `direct`: `lstm dlinear segrnn_thuml tsmixer patchmixer tide xpatch patchtst frets itransformer` (DIRECT_MULTI, 10)
 
 > **Note:** here `lstm` runs **direct**, not recursive — recursive needs targets == all
 > input channels (2 ≠ 4), so it is not applicable to this multi-target multivariable config.
@@ -150,20 +157,20 @@ CUDA_VISIBLE_DEVICES=1 python main.py --data_path $P --target_col p_gt10 $COMMON
   --event_threshold 10 --forecast_strategy recursive --models lstm
 CUDA_VISIBLE_DEVICES=1 python main.py --data_path $P --target_col p_gt10 $COMMON \
   --event_threshold 10 --forecast_strategy direct \
-  --models patchtst itransformer timemixer
+  --models dlinear segrnn_thuml tsmixer patchmixer tide xpatch patchtst frets itransformer
 
 # --- UNI-B: xrs_long (swap file/target/threshold, same two-run pattern) ---
 CUDA_VISIBLE_DEVICES=1 python main.py --data_path $X --target_col xrs_long $COMMON \
   --event_threshold 1e-5 --forecast_strategy recursive --models lstm
 CUDA_VISIBLE_DEVICES=1 python main.py --data_path $X --target_col xrs_long $COMMON \
   --event_threshold 1e-5 --forecast_strategy direct \
-  --models patchtst itransformer timemixer
+  --models dlinear segrnn_thuml tsmixer patchmixer tide xpatch patchtst frets itransformer
 
 # --- Track 2: multivariable, multi-target (direct, lstm included as direct) ---
 CUDA_VISIBLE_DEVICES=1 python main.py --data_path $P --target_col p_gt10 $COMMON \
   --channels $P:p_gt10 $P:p_gt100 $X:xrs_long $X:xrs_short \
   --target_cols p_gt10 xrs_long --event_threshold 10 1e-5 \
-  --forecast_strategy direct --models lstm patchtst itransformer timemixer
+  --forecast_strategy direct --models lstm dlinear segrnn_thuml tsmixer patchmixer tide xpatch patchtst frets itransformer
 ```
 
 (Sweep `--seq_len {2016,864,288}` and `--pred_len {144,288}` over these. `--data_path`/
@@ -172,9 +179,9 @@ channel set, so they act only as the required placeholder.)
 
 ## Run matrix size (per fold, current scope)
 
-- Track 1: 2 sub-tracks × 3 seq_len × 2 pred_len × (1 recursive + 3 direct) = **48 model-runs**
-- Track 2: 3 seq_len × 2 pred_len × 4 direct = **24 model-runs**
-- Total ≈ **72 model-runs/fold** → ×5 folds ≈ **360**. Pilot fold 0 first.
+- Track 1: 2 sub-tracks × 3 seq_len × 2 pred_len × (1 recursive + 9 direct) = **120 model-runs**
+- Track 2: 3 seq_len × 2 pred_len × 10 direct = **60 model-runs**
+- Total ≈ **180 model-runs/fold** → ×5 folds ≈ **900**. Pilot fold 0 first. (All are fast-tier models — <10 min/epoch — with EarlyStopping.)
 
 ## Deferred: statistic (later, separate)
 
