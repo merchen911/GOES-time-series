@@ -40,9 +40,16 @@ DATA_DIR = os.environ.get(
 PARTICLE = f"{DATA_DIR}/kasi_swpc_particle_5m.parquet"
 XRAY = f"{DATA_DIR}/kasi_swpc_xray_1m.parquet"
 
-# Direct model sets (timesnet excluded per benchmark spec).
-DIRECT_UNI = ["patchtst", "itransformer", "timemixer"]
-DIRECT_MULTI = ["lstm", "patchtst", "itransformer", "timemixer"]
+# Direct model sets — fast tier only. Selected by a per-epoch speed probe
+# (2026-07-07, direct mode, all seq_len/pred_len combos): every model here stays
+# under ~10 min/epoch in EVERY sweep cell. Excluded as too slow (>=10 min/epoch
+# in at least one combo): timemixer, etsformer, micn, scinet, timesnet, and
+# nonstationary_transformer (also OOMs at seq_len>=864). segrnn omitted as
+# redundant with segrnn_thuml.
+_FAST = ["dlinear", "segrnn_thuml", "tsmixer", "patchmixer", "tide",
+         "xpatch", "patchtst", "frets", "itransformer"]
+DIRECT_UNI = list(_FAST)               # lstm runs recursive in Track 1, not here
+DIRECT_MULTI = ["lstm"] + list(_FAST)  # lstm runs direct in the multi-target track
 
 SEQ_LENS = [288, 864, 2016]   # 1 d / 3 d / 7 d — light first, so the first/cheapest cells run first
 PRED_LENS = [144, 288]        # 0.5 d / 1 d

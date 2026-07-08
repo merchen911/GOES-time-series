@@ -33,10 +33,12 @@ class TestBuildCmd(unittest.TestCase):
         cmd = driver.build_cmd(cell, epochs=30)
         self.assertIn("--forecast_strategy", cmd)
         self.assertEqual(cmd[cmd.index("--forecast_strategy") + 1], "direct")
-        # direct univariate model set (timesnet excluded)
+        # direct univariate model set = the fast tier (no lstm; slow models excluded)
         mi = cmd.index("--models")
-        self.assertEqual(cmd[mi + 1:mi + 4],
-                         ["patchtst", "itransformer", "timemixer"])
+        n = len(driver.DIRECT_UNI)
+        self.assertEqual(cmd[mi + 1:mi + 1 + n], driver.DIRECT_UNI)
+        self.assertNotIn("timemixer", cmd)
+        self.assertNotIn("segrnn", cmd[mi + 1:mi + 1 + n])  # segrnn dropped (redundant)
         self.assertEqual(cmd[cmd.index("--event_threshold") + 1], "10")
         self.assertEqual(cmd[cmd.index("--seq_len") + 1], "288")
         self.assertEqual(cmd[cmd.index("--pred_len") + 1], "144")
@@ -61,8 +63,9 @@ class TestBuildCmd(unittest.TestCase):
         ei = cmd.index("--event_threshold")
         self.assertEqual(cmd[ei + 1:ei + 3], ["10", "1e-5"])
         mi = cmd.index("--models")
-        self.assertEqual(cmd[mi + 1:mi + 5],
-                         ["lstm", "patchtst", "itransformer", "timemixer"])
+        n = len(driver.DIRECT_MULTI)
+        self.assertEqual(cmd[mi + 1:mi + 1 + n], driver.DIRECT_MULTI)
+        self.assertEqual(cmd[mi + 1], "lstm")  # lstm runs direct in the multi track
 
 
 class TestRebuildMaster(unittest.TestCase):
