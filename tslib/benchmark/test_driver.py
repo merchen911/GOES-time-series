@@ -16,14 +16,15 @@ class TestEnumerateCells(unittest.TestCase):
         self.assertEqual(len(cells), 18)
         self.assertTrue(all(c["strategy"] == "direct" for c in cells))
 
-    def test_recursive_excludes_multi(self):
+    def test_recursive_covers_all_tracks(self):
         cells = driver.enumerate_cells(
             tracks=list(driver.TRACKS), seq_lens=[288], pred_lens=[144],
             folds=[0], strategies=["recursive"])
-        # only uni_a and uni_b have a recursive model; multi is dropped
+        # every track has a recursive lstm now — multi forecasts its 2 input
+        # channels (targets == channels), so recursive applies to it too.
         tracks = {c["track"] for c in cells}
-        self.assertEqual(tracks, {"uni_a", "uni_b"})
-        self.assertEqual(len(cells), 2)
+        self.assertEqual(tracks, {"uni_a", "uni_b", "multi"})
+        self.assertEqual(len(cells), 3)
 
 
 class TestBuildCmd(unittest.TestCase):
@@ -53,11 +54,15 @@ class TestBuildCmd(unittest.TestCase):
         # univariate has no channels
         self.assertNotIn("--channels", cmd)
 
-    def test_multi_direct_has_channels_and_two_thresholds(self):
+    def test_multi_direct_has_two_channels_and_thresholds(self):
         cell = {"track": "multi", "seq_len": 864, "pred_len": 288,
                 "fold": 0, "strategy": "direct"}
         cmd = driver.build_cmd(cell, epochs=30)
-        self.assertIn("--channels", cmd)
+        ci = cmd.index("--channels")
+        # multivariable = exactly 2 channels (p_gt10 + xrs_long), matching targets
+        self.assertTrue(cmd[ci + 1].endswith(":p_gt10"))
+        self.assertTrue(cmd[ci + 2].endswith(":xrs_long"))
+        self.assertEqual(cmd[ci + 3], "--target_cols")  # only 2 channels listed
         ti = cmd.index("--target_cols")
         self.assertEqual(cmd[ti + 1:ti + 3], ["p_gt10", "xrs_long"])
         ei = cmd.index("--event_threshold")
@@ -65,7 +70,20 @@ class TestBuildCmd(unittest.TestCase):
         mi = cmd.index("--models")
         n = len(driver.DIRECT_MULTI)
         self.assertEqual(cmd[mi + 1:mi + 1 + n], driver.DIRECT_MULTI)
-        self.assertEqual(cmd[mi + 1], "lstm")  # lstm runs direct in the multi track
+        self.assertNotIn("lstm", cmd[mi + 1:mi + 1 + n])  # lstm is recursive, not direct
+
+    def test_multi_recursive_forecasts_all_channels(self):
+        cell = {"track": "multi", "seq_len": 288, "pred_len": 144,
+                "fold": 0, "strategy": "recursive"}
+        cmd = driver.build_cmd(cell, epochs=30)
+        self.assertEqual(cmd[cmd.index("--forecast_strategy") + 1], "recursive")
+        mi = cmd.index("--models")
+        self.assertEqual(cmd[mi + 1], "lstm")
+        # recursive needs targets == channels: 2 channels, 2 targets
+        ci = cmd.index("--channels")
+        self.assertEqual(cmd[ci + 3], "--target_cols")
+        ti = cmd.index("--target_cols")
+        self.assertEqual(cmd[ti + 1:ti + 3], ["p_gt10", "xrs_long"])
 
 
 class TestRebuildMaster(unittest.TestCase):
