@@ -2,12 +2,12 @@
 
 - **Date:** 2026-06-30
 - **Status:** approved (design), implementation pending
-- **Workspace:** `workdir/sw-framework-v002/` (full copy of `sw-framework-v001/`; v001 kept untouched as backup)
+- **Module:** `tslib/data/loader.py`
 - **Scope:** wire the new KASI SWPC parquet + strict half-year (term) train/val/test split into the existing PyTorch-Lightning `DataModule`. **Univariate first** (multivariate deferred).
 
 ## 1. Goal & context
 
-`sw-framework-v001/src/data/loader.py::DataModule` already carries the split
+`tslib/data/loader.py::DataModule` already carries the split
 machinery (`split_type ∈ {year_half, year, ratio}`, rotating k-fold via
 `_fold_indices`), but it (a) reads **CSV**, (b) assumes a single **wide**
 series (one row per timestamp), and (c) builds windows **without gap
@@ -24,7 +24,7 @@ and produce gap-free sliding windows for one target channel of the
 
 | # | Decision |
 |---|---|
-| D1 | Work in a **copy** `workdir/sw-framework-v002/`; v001 = pristine backup. |
+| D1 | Extend the existing `DataModule` in `tslib/data/loader.py` in place. |
 | D2 | **In-place** extension of `DataModule` (not a parallel module); existing `ratio`/CSV path preserved. |
 | D3 | **Univariate first**; multivariate (particle+xray join) deferred. |
 | D4 | Target transform is config-selectable: `--transform {none,log10}`, **default `log10`** (normalization left to model RevIN/StandardNorm). |
@@ -34,7 +34,7 @@ and produce gap-free sliding windows for one target channel of the
 
 ## 3. Architecture
 
-Single touched file: **`workdir/sw-framework-v002/src/data/loader.py`**
+Single touched file: **`tslib/data/loader.py`**
 (plus a new test file). `exp.py`/`main.py` interface is unchanged
 (`DataModule(config).setup() -> DataBundle`).
 
@@ -110,8 +110,7 @@ not gap-upgraded.
 - **2026-06-30** — Design approved. v002 created as copy of v001 (v001/.git had
   no commits; folder copy is the backup). Spec written. *Next: implementation
   plan (writing-plans).*
-- **2026-06-30** — Implementation plan written
-  (`dataloader-split-plan.md`) and executed task-by-task on branch
+- **2026-06-30** — Implemented and executed task-by-task on branch
   `feat/dataloader-split` (baseline `12cae1e`):
   - Task 1 (`d269c4c`) — config flags `--role`/`--transform`/`--cadence_min`;
     parquet bypasses the `--time_col` requirement.
@@ -133,7 +132,7 @@ not gap-upgraded.
   match, leakage-free partition verified across n_term 3–39 × n_fold 3–7.
   Merged `feat/dataloader-split` → `master` (`ffbf4ef`, --no-ff); feature
   branch deleted; 17/17 tests pass on merged master. **Status: complete.**
-  Deferred Minors (see `.superpowers/sdd/progress.md`): CSV-branch `columns`
+  Deferred Minors: CSV-branch `columns`
   ignored (parquet path unaffected); no `__getitem__` bounds guard (starts are
   precomputed valid); a few test-scope/readability nits. Next stream:
   multivariate (particle+xray common-grid join), out of this scope.

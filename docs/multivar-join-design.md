@@ -2,7 +2,7 @@
 
 - **Date:** 2026-07-01
 - **Status:** approved (design), implementation pending
-- **Workspace:** `workdir/sw-framework-v002/` (extends the univariate loader; see
+- **Module:** `tslib/data/loader.py` (extends the univariate loader; see
   [dataloader-split-design.md](dataloader-split-design.md))
 - **Scope:** extend `DataModule` to build a **multivariate** input by joining N
   parquet channels (e.g. particle `p_gt10` + xray `xrs_long`) on a common
@@ -35,7 +35,7 @@ spec moves that logic into the training `DataModule` with one refinement:
 
 ## 3. Architecture
 
-Touched file: **`workdir/sw-framework-v002/src/data/loader.py`** (+ `config.py`,
+Touched file: **`tslib/data/loader.py`** (+ `config.py`,
 + tests). `exp.py` interface stays compatible (new `DataBundle.output_size`
 defaults to 1). The `.parquet` branch of `setup()` handles both 1 and N
 channels; the legacy CSV/`ratio` path is untouched.
@@ -123,8 +123,7 @@ role mixing.
 
 - **2026-07-01** — Design approved (M1–M8). *Next: implementation plan
   (writing-plans).*
-- **2026-07-01** — Implementation plan written
-  (`multivar-join-plan.md`) and executed task-by-task via
+- **2026-07-01** — Implemented and executed task-by-task via
   subagent-driven-development on branch `feat/multivar-join`
   (baseline `ffbf4ef`):
   - Task 1 (`eeff038`) — config flags `--channels PATH:COL`,

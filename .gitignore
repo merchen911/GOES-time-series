@@ -24,3 +24,7 @@ dist/
 *.pkl
 # Generated analysis tables (regenerate via preprocessing/make_latex_tables.py)
 fold_sample_tables.*
+
+# --- Release artifacts: tracked despite the broad data ignores above ---
+!results/
+!results/*.csv

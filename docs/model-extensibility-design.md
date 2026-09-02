@@ -1,7 +1,7 @@
 # Model-extensibility code structure — design
 
 **Date:** 2026-07-01
-**Repo:** `workdir/sw-framework-v002/` (branch off `master`)
+**Module:** `tslib/model/` registries
 **Status:** approved, pre-implementation
 
 ## 1. Goal
