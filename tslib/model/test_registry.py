@@ -123,6 +123,25 @@ class TestNewLightweight2(unittest.TestCase):
         _assert_builds(self, ["tsmixer", "tide"], channels=3)
 
 
+class TestRLinear(unittest.TestCase):
+    def test_builds(self):
+        _assert_builds(self, ["rlinear"])
+
+    def test_builds_multivar(self):
+        # shared linear head (individual defaults False) over 3 channels
+        _assert_builds(self, ["rlinear"], channels=3)
+
+    def test_individual_head_builds_multivar(self):
+        # opt-in per-channel head; passed via config attr, not a CLI flag
+        cfg = _real_cfg(["rlinear"], channels=3)
+        cfg.individual = True
+        net = build_model("rlinear", cfg, 3, [0, 1, 2], strategy="direct")
+        net.eval()
+        with torch.no_grad():
+            out = net(torch.zeros(2, cfg.seq_len, 3))
+        self.assertEqual(tuple(out.shape), (2, cfg.pred_len, 3))
+
+
 class TestEtsformer(unittest.TestCase):
     def test_builds(self):
         # etsformer asserts e_layers == d_layers (encoder/decoder layer

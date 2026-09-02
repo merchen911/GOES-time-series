@@ -27,7 +27,7 @@ def register_model(name, *, adapter="standard"):
 _LEGACY = ["lstm", "timesnet", "patchtst", "itransformer", "micn",
            "nonstationary_transformer", "patchmixer", "scinet", "segrnn",
            "segrnn_thuml", "timemixer", "etsformer", "xpatch",
-           "dlinear", "frets", "tsmixer", "tide"]
+           "dlinear", "frets", "tsmixer", "tide", "rlinear"]
 
 
 def _legacy_ctor(name):
