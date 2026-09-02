@@ -7,7 +7,7 @@ multivariable track. (Classical `statistic` models are deferred to a separate la
 
 ## Data
 
-Location: `$SW_DATA_DIR` = `/NAS/ioGuard3/vol3/spaceai/SW_framework/data/goes_data/processed`
+Location: `$SW_DATA_DIR` (default `./data/goes_data/processed`)
 
 | file | cadence | columns used |
 |---|---|---|
@@ -150,7 +150,7 @@ Merge the two runs per cell → one table ranking all 10 model-runs.
 ## Example commands
 
 ```bash
-export SW_DATA_DIR=/NAS/ioGuard3/vol3/spaceai/SW_framework/data/goes_data/processed
+export SW_DATA_DIR=./data/goes_data/processed
 P=$SW_DATA_DIR/kasi_swpc_particle_5m.parquet
 X=$SW_DATA_DIR/kasi_swpc_xray_1m.parquet
 COMMON="--seq_len 288 --pred_len 288 --n_fold 5 --fold_numb 0 --transform log10 \
