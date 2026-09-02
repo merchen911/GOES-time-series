@@ -36,7 +36,7 @@ import pandas as pd
 REPO = Path(__file__).resolve().parents[2]
 DATA_DIR = os.environ.get(
     "SW_DATA_DIR",
-    "/NAS/ioGuard3/vol3/spaceai/SW_framework/data/goes_data/processed")
+    str(REPO / "data" / "goes_data" / "processed"))
 PARTICLE = f"{DATA_DIR}/kasi_swpc_particle_5m.parquet"
 XRAY = f"{DATA_DIR}/kasi_swpc_xray_1m.parquet"
 
@@ -47,7 +47,7 @@ XRAY = f"{DATA_DIR}/kasi_swpc_xray_1m.parquet"
 # nonstationary_transformer (also OOMs at seq_len>=864). segrnn omitted as
 # redundant with segrnn_thuml.
 _FAST = ["dlinear", "segrnn_thuml", "tsmixer", "patchmixer", "tide",
-         "xpatch", "patchtst", "frets", "itransformer"]
+         "xpatch", "patchtst", "frets", "itransformer", "rlinear"]
 # lstm runs recursive in every track (its natural mode); the fast tier are the
 # direct backbones. Same direct set for univariate and multivariable tracks.
 DIRECT_UNI = list(_FAST)
@@ -67,6 +67,7 @@ FIXED = [
     "--num_layers", "2",
     "--dropout", "0.1",
     "--early_stop_patience", "10",
+    "--num_workers", "12",
 ]
 
 # Per-track definitions. The multivariable track forecasts exactly its 2 input
