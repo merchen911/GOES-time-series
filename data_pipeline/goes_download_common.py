@@ -22,7 +22,7 @@ from pathlib import Path
 
 USER_AGENT = (
     "KASI-GOES-collector/0.2 (proton+xrs science collection; "
-    "contact jowonkeun@kasi.re.kr; polite, low-concurrency)"
+    "contact https://github.com/merchen911/GOES-time-series; polite, low-concurrency)"
 )
 MAX_BACKOFF = 300.0
 RETRYABLE_HTTP = (429, 500, 502, 503, 504)

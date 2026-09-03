@@ -94,7 +94,7 @@ DOC_FALLBACK = [
 PRODUCT_DESC = "science-quality L2 1-min avg (xrsf-l2-avg1m_science)"
 USER_AGENT = (
     "KASI-GOES-collector/0.2 (XRS science-quality; "
-    "contact jowonkeun@kasi.re.kr; polite, low-concurrency)"
+    "contact https://github.com/merchen911/GOES-time-series; polite, low-concurrency)"
 )
 MAX_BACKOFF = 300.0  # cap any backoff / Retry-After at 5 minutes
 
