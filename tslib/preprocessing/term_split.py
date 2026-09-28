@@ -1,6 +1,6 @@
 """Half-year (term) tagging + strict time-series train/val/test split.
 
-The KASI SWPC parquet datasets (goes_data/processed/kasi_swpc_*.parquet) are
+The KSWRC parquet datasets (goes_data/processed/kswrc_*.parquet) are
 NOT rewritten. Instead we read the `time_utc` column and derive a period tag
 ("_term") in memory at load time -- cheap on I/O, no duplicated 100+ MB files.
 
@@ -39,7 +39,7 @@ def add_term(df: pd.DataFrame, *, time_col: str = TIME_COL,
     """Return a copy of `df` with a `_term` column derived from `time_col`.
 
     Mirrors legacy add_halfyear_group / _add_term_column. `time_col` may be
-    tz-aware (the KASI parquet is UTC) -- only year/month are used.
+    tz-aware (the KSWRC parquet is UTC) -- only year/month are used.
     """
     out = df.copy()
     t = pd.to_datetime(out[time_col])

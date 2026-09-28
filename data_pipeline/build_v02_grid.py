@@ -1,5 +1,5 @@
 #!/usr/bin/env python3.12
-"""Regrid a v01 KASI-SWPC parquet onto a regular native-cadence time grid (v02).
+"""Regrid a v01 KSWRC parquet onto a regular native-cadence time grid (v02).
 
 The v01 datasets contain a row only where the source had a sample, so the time
 axis is not regular (missing 5-min / 1-min slots, and several series sharing a
@@ -28,8 +28,8 @@ Meta columns on newly-created (missing) rows:
 Channel values are NA on filled rows. v01 is left untouched.
 
 Run: python3.12 build_v02_grid.py \
-        --in  goes_data/processed/kasi_swpc_particle_5m.parquet \
-        --out goes_data/processed/kasi_swpc_particle_5m_v02.parquet \
+        --in  goes_data/processed/kswrc_particle_5m.parquet \
+        --out goes_data/processed/kswrc_particle_5m_v02.parquet \
         --step-min 5
 """
 from __future__ import annotations

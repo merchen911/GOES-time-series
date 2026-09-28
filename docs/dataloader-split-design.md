@@ -3,7 +3,7 @@
 - **Date:** 2026-06-30
 - **Status:** approved (design), implementation pending
 - **Module:** `tslib/data/loader.py`
-- **Scope:** wire the new KASI SWPC parquet + strict half-year (term) train/val/test split into the existing PyTorch-Lightning `DataModule`. **Univariate first** (multivariate deferred).
+- **Scope:** wire the new KSWRC parquet + strict half-year (term) train/val/test split into the existing PyTorch-Lightning `DataModule`. **Univariate first** (multivariate deferred).
 
 ## 1. Goal & context
 
@@ -123,7 +123,7 @@ not gap-upgraded.
     legacy CSV/`ratio` path untouched.
   - Tests: **13/13 pass** (`python3.12 -m unittest data.test_loader`),
     legacy-import regression OK. Each task got a spec+quality review (all
-    clean, Minor-only). Real-data check on `kasi_swpc_particle_5m_v02.parquet`
+    clean, Minor-only). Real-data check on `kswrc_particle_5m_v02.parquet`
     (`p_gt10`, primary, log10, `year_half`, fold 0, seq 288 + pred 12):
     train 33 terms / 1,076,731 windows, val 11 / 370,516, test 11 / 350,429 —
     leakage-free term partition confirmed. *Next: final whole-branch review.*

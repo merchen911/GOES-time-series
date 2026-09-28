@@ -37,8 +37,8 @@ REPO = Path(__file__).resolve().parents[2]
 DATA_DIR = os.environ.get(
     "SW_DATA_DIR",
     str(REPO / "data" / "goes_data" / "processed"))
-PARTICLE = f"{DATA_DIR}/kasi_swpc_particle_5m.parquet"
-XRAY = f"{DATA_DIR}/kasi_swpc_xray_1m.parquet"
+PARTICLE = f"{DATA_DIR}/kswrc_particle_5m.parquet"
+XRAY = f"{DATA_DIR}/kswrc_xray_1m.parquet"
 
 # Direct model sets — fast tier only. Selected by a per-epoch speed probe
 # (2026-07-07, direct mode, all seq_len/pred_len combos): every model here stays

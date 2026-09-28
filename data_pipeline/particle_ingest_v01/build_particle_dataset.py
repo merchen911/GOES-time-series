@@ -6,7 +6,7 @@ Reads every daily 5-minute particle file under the SWPC archive directory
 formats (see parse_particle.py), records per-file provenance with sha256, and
 emits a single native-cadence (5-min UTC) columnar file:
 
-    goes_data/processed/kasi_swpc_particle_5m.parquet
+    goes_data/processed/kswrc_particle_5m.parquet
 
 plus a QC report at goes_data/manifest/particle_qc_report.md and a provenance
 manifest at goes_data/manifest/particle_provenance.jsonl.
@@ -120,7 +120,7 @@ def build_dataframe(files: list[str], log: Logger,
                     out_root: str, copy_raw: bool) -> pd.DataFrame:
     frames: list[pd.DataFrame] = []
     n = len(files)
-    raw_root = os.path.join(out_root, "raw", "proton", "kasi_swpc")
+    raw_root = os.path.join(out_root, "raw", "proton", "kswrc")
     for i, path in enumerate(files, 1):
         base = os.path.basename(path)
         with open(path, "rb") as fh:
@@ -201,7 +201,7 @@ def finalize(df: pd.DataFrame, desig: pd.DataFrame | None) -> pd.DataFrame:
 
 
 def write_qc(df: pd.DataFrame, path: str, n_files: int) -> None:
-    lines = ["# KASI SWPC GOES particle — combined dataset QC report", ""]
+    lines = ["# KSWRC GOES particle — combined dataset QC report", ""]
     lines.append(f"- generated: {now_utc()}")
     lines.append(f"- source files parsed: {n_files}")
     lines.append(f"- total rows (time x series): {len(df):,}")
@@ -282,7 +282,7 @@ def main(argv=None) -> int:
     log(f"designation_table: {'loaded' if desig is not None else 'MISSING'}")
     df = finalize(df, desig)
 
-    out_parquet = os.path.join(out_root, "processed", "kasi_swpc_particle_5m.parquet")
+    out_parquet = os.path.join(out_root, "processed", "kswrc_particle_5m.parquet")
     df.to_parquet(out_parquet, engine="pyarrow", compression="snappy", index=False)
     sz = os.path.getsize(out_parquet) / 1e6
     log(f"wrote {out_parquet} ({len(df):,} rows, {sz:.1f} MB)")

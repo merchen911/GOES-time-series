@@ -6,7 +6,7 @@ Sibling of particle_ingest_v01/build_particle_dataset.py. Reads every daily
 $SW_GOES_ARCHIVE_XRAY or --db), parses both on-disk formats
 (see parse_xray.py), records per-file provenance with sha256, and emits:
 
-    goes_data/processed/kasi_swpc_xray_1m.parquet
+    goes_data/processed/kswrc_xray_1m.parquet
     goes_data/manifest/xray_provenance.jsonl
     goes_data/manifest/xray_qc_report.md
 
@@ -80,7 +80,7 @@ def list_files(db: str, years: list[str] | None) -> list[str]:
 def build_dataframe(files, log, manifest, out_root, copy_raw):
     frames = []
     n = len(files)
-    raw_root = os.path.join(out_root, "raw", "xrs", "kasi_swpc")
+    raw_root = os.path.join(out_root, "raw", "xrs", "kswrc")
     for i, path in enumerate(files, 1):
         base = os.path.basename(path)
         with open(path, "rb") as fh:
@@ -156,7 +156,7 @@ def finalize(df, desig):
 
 
 def write_qc(df, path, n_files):
-    L = ["# KASI SWPC GOES X-ray (XRS) — combined dataset QC report", ""]
+    L = ["# KSWRC GOES X-ray (XRS) — combined dataset QC report", ""]
     L.append(f"- generated: {now_utc()}")
     L.append(f"- source files parsed: {n_files}")
     L.append(f"- total rows (time x series): {len(df):,}")
@@ -225,7 +225,7 @@ def main(argv=None) -> int:
     log(f"designation_table: {'loaded' if desig is not None else 'MISSING'}")
     df = finalize(df, desig)
 
-    out_parquet = os.path.join(out_root, "processed", "kasi_swpc_xray_1m.parquet")
+    out_parquet = os.path.join(out_root, "processed", "kswrc_xray_1m.parquet")
     df.to_parquet(out_parquet, engine="pyarrow", compression="snappy", index=False)
     log(f"wrote {out_parquet} ({len(df):,} rows, "
         f"{os.path.getsize(out_parquet)/1e6:.1f} MB)")

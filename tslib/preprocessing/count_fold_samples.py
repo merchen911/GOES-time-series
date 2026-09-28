@@ -32,8 +32,8 @@ DAY = 24 * 12  # 288 five-minute steps per day
 # Data lives outside the repo (shared separately). Point SW_DATA_DIR at the
 # processed-parquet directory; the default is a repo-relative "data/..." path.
 PROC = os.environ.get("SW_DATA_DIR", "data/goes_data/processed")
-PART = f"{PROC}/kasi_swpc_particle_5m_v02.parquet"
-XRAY = f"{PROC}/kasi_swpc_xray_1m_v02.parquet"
+PART = f"{PROC}/kswrc_particle_5m_v02.parquet"
+XRAY = f"{PROC}/kswrc_xray_1m_v02.parquet"
 
 # Each config is a list of (parquet, target) channels. Multivariate configs
 # require ALL channels present (AND) across the whole window on a common 5-min

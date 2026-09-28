@@ -11,8 +11,8 @@ Location: `$SW_DATA_DIR` (default `./data/goes_data/processed`)
 
 | file | cadence | columns used |
 |---|---|---|
-| `kasi_swpc_particle_5m.parquet` | 5 min | `p_gt10`, `p_gt100` (proton integral flux, pfu) |
-| `kasi_swpc_xray_1m.parquet` | 1 min | `xrs_long`, `xrs_short` (W/m²) |
+| `kswrc_particle_5m.parquet` | 5 min | `p_gt10`, `p_gt100` (proton integral flux, pfu) |
+| `kswrc_xray_1m.parquet` | 1 min | `xrs_long`, `xrs_short` (W/m²) |
 
 Common 5-min grid (`--cadence_min 5`, xray resample-mean to 5 min), `role=primary`,
 `--transform log10`. Multivariable channels span both files (outer-join on the grid).
@@ -151,8 +151,8 @@ Merge the two runs per cell → one table ranking all 10 model-runs.
 
 ```bash
 export SW_DATA_DIR=./data/goes_data/processed
-P=$SW_DATA_DIR/kasi_swpc_particle_5m.parquet
-X=$SW_DATA_DIR/kasi_swpc_xray_1m.parquet
+P=$SW_DATA_DIR/kswrc_particle_5m.parquet
+X=$SW_DATA_DIR/kswrc_xray_1m.parquet
 COMMON="--seq_len 288 --pred_len 288 --n_fold 5 --fold_numb 0 --transform log10 \
   --metrics rmse mae tss hss pod far --epochs 10000 --early_stop_patience 10 \
   --batch_size 64 --lr 1e-3"

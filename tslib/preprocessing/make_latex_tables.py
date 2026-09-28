@@ -60,7 +60,7 @@ def build():
     A(r"\usepackage[margin=2.2cm,a4paper]{geometry}")
     A(r"\usepackage{booktabs}\usepackage{multirow}\usepackage{array}")
     A(r"\usepackage{caption}\captionsetup{font=small}")
-    A(r"\title{KASI SWPC GOES: Strict Time-Series Splitting and Trainable-Sample Counts}")
+    A(r"\title{KSWRC GOES: Strict Time-Series Splitting and Trainable-Sample Counts}")
     A(r"\author{Space Weather AI Framework -- preprocessing}")
     A(r"\date{Generated automatically; data v02 (regular 5-min grid)}")
     A(r"\begin{document}\maketitle")

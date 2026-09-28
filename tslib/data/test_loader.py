@@ -9,7 +9,7 @@ from tslib.data.loader import _parse_channels, _resolve_channels
 # Real-data tests are skipUnless the parquet exists; point SW_DATA_DIR at the
 # processed-parquet dir (data is shared separately, not in the repo).
 PROC = os.environ.get("SW_DATA_DIR", "data/goes_data/processed")
-PARTICLE = os.path.join(PROC, "kasi_swpc_particle_5m_v02.parquet")
+PARTICLE = os.path.join(PROC, "kswrc_particle_5m_v02.parquet")
 
 
 class TestValidStarts(unittest.TestCase):
@@ -254,7 +254,7 @@ class TestGridResampleMean(unittest.TestCase):
         np.testing.assert_array_equal(starts, np.array([0, 2]))  # row 1 invalid
 
 
-XRAY = os.path.join(PROC, "kasi_swpc_xray_1m_v02.parquet")
+XRAY = os.path.join(PROC, "kswrc_xray_1m_v02.parquet")
 
 
 def _cfg_mv(**kw):
