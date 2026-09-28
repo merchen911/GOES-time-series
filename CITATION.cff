@@ -1,0 +1,38 @@
+cff-version: 1.2.0
+message: "If you use this benchmark, code, or dataset, please cite both the software and the dataset."
+title: "GOES-time-series: a leakage-controlled benchmark for GOES soft X-ray and proton flux forecasting"
+type: software
+authors:
+  - family-names: Jo
+    given-names: Wonkeun
+    affiliation: Korea Astronomy and Space Science Institute
+  - family-names: Park
+    given-names: Eunsu
+    affiliation: Korea Astronomy and Space Science Institute
+  - family-names: Baek
+    given-names: Ji-Hye
+    affiliation: "Korea Astronomy and Space Science Institute; University of Science and Technology (UST)"
+version: 1.0.0
+date-released: 2026-09-28
+license: Apache-2.0
+repository-code: "https://github.com/merchen911/GOES-time-series"
+keywords:
+  - GOES
+  - space weather
+  - solar flares
+  - solar energetic particles
+  - time series forecasting
+  - benchmark
+references:
+  - type: data
+    title: "GOES soft X-ray and >=10 MeV proton flux: benchmark dataset for space-weather time-series forecasting"
+    doi: 10.5281/zenodo.22245285
+    version: 1.0.0
+    license: CC-BY-4.0
+    authors:
+      - family-names: Jo
+        given-names: Wonkeun
+      - family-names: Park
+        given-names: Eunsu
+      - family-names: Baek
+        given-names: Ji-Hye

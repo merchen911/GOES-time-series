@@ -21,8 +21,10 @@ and flare-related quantities.
   that auto-skips models estimated to run too long (see
   [`docs/lightning-migration.md`](docs/lightning-migration.md)).
 
-> **Data is not included** in this repository and is shared separately. Point
-> `SW_DATA_DIR` at your processed-parquet directory before running (see below).
+> **Data is not included** in this repository. Download it from Zenodo
+> ([10.5281/zenodo.22245285](https://doi.org/10.5281/zenodo.22245285)) or
+> reconstruct it from public NOAA sources — see [DATA.md](DATA.md). Point
+> `SW_DATA_DIR` at the processed-parquet directory before running.
 
 ## Benchmark leaderboard
 
@@ -79,6 +81,12 @@ _Mean over the 5-fold rotating split and all input-length/horizon cells; lower R
 
 Regenerate with `python3.12 scripts/make_leaderboard.py`.
 
+## Data & reproduction
+
+- **Data** — download from Zenodo or rebuild from NOAA sources: [DATA.md](DATA.md)
+- **Reproduce** the benchmark end-to-end: [REPRODUCE.md](REPRODUCE.md)
+- **Reconstruction pipeline** (public NOAA/NCEI download + ingest): [data_pipeline/](data_pipeline/)
+
 ## Installation
 
 The code lives in the importable `tslib` package. Install it editable so
@@ -112,14 +120,14 @@ Run one or more models and compare them:
 
 ```bash
 # Univariate: proton p_gt10, 7-day look-back -> 1-day forecast
-python main.py --data_path $SW_DATA_DIR/kasi_swpc_particle_5m_v02.parquet \
+python main.py --data_path $SW_DATA_DIR/kswrc_particle_5m.parquet \
     --target_col p_gt10 --seq_len 2016 --pred_len 288 \
     --n_fold 5 --fold_numb 0 --models lstm patchtst
 
 # Multivariate input -> single target (proton + X-ray in, proton out)
 python main.py \
-    --channels $SW_DATA_DIR/kasi_swpc_particle_5m_v02.parquet:p_gt10 \
-               $SW_DATA_DIR/kasi_swpc_xray_1m_v02.parquet:xrs_long \
+    --channels $SW_DATA_DIR/kswrc_particle_5m.parquet:p_gt10 \
+               $SW_DATA_DIR/kswrc_xray_1m.parquet:xrs_long \
     --target_cols p_gt10 --seq_len 864 --pred_len 288 --models lstm patchtst
 
 # Multivariate input -> multi-target (forecast both channels)
@@ -162,6 +170,9 @@ python main.py --channels $SW_DATA_DIR/...:p_gt10 $SW_DATA_DIR/...:xrs_long \
 │   ├── model/        # model sources + build_model / forecast adapter
 │   ├── exp/          # training loop and multi-model comparison
 │   └── preprocessing/# term-split, fold-sample counting, table generation
+├── data_pipeline/    # public NOAA/NCEI download + ingest -> parquet
+├── results/          # results_master.csv (the full benchmark table)
+├── scripts/          # fetch_data.py, make_leaderboard.py
 ├── notebook/         # exploratory / analysis notebooks (import tslib)
 ├── docs/             # design documents
 └── main.py           # CLI entry point (imports tslib)
@@ -189,6 +200,13 @@ See `docs/`:
 
 - `runs/<run_name>/ckpt/<model>.ckpt`
 - `runs/<run_name>/score/comparison.csv`
+
+## Citation
+
+If you use this benchmark, code, or dataset, please cite both (see [CITATION.cff](CITATION.cff)):
+
+- **Code / benchmark** — this repository
+- **Dataset** — Zenodo DOI [10.5281/zenodo.22245285](https://doi.org/10.5281/zenodo.22245285)
 
 ## License
 
