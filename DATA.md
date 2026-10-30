@@ -22,7 +22,8 @@ Two Apache Parquet files (~254 MB total):
 
 `role` is the per-satellite designation (`primary` / `secondary`); the loader
 filters to `primary` by default. Values are raw flux — pass `--transform log10`.
-These are the exact files the benchmark (`results/results_master.csv`) was run on.
+These are the exact files the benchmark was run on (`results/results_regression.csv`
+and `results/results_event.csv` for v2; the v1.0.0 table is `results/v1/results_master.csv`).
 
 ## Reconstruct from source (optional)
 

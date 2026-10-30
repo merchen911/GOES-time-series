@@ -1,0 +1,58 @@
+# pooled rows: 1746  (870 from v004 + 876 from v003)
+# 36 base-cells x 5 folds | horizons ['3 h', '6 h', '12 h', '24 h']
+# metric: HSS (primary per track), mean over 5 folds
+
+==============================================================================
+A. SKILL vs FORECAST HORIZON  (best model per cell, 5-fold mean HSS)
+==============================================================================
+track                  seq_len       3 h      6 h     12 h     24 h   3h->24h
+------------------------------------------------------------------------------
+PROTON (p>10)              288     0.938    0.905    0.846    0.734       22%
+PROTON (p>10)              864     0.939    0.908    0.848    0.742       21%
+PROTON (p>10)             2016     0.928    0.888    0.807    0.708       24%
+XRAY (xrs_long)            288     0.298    0.187    0.133    0.095       68%
+XRAY (xrs_long)            864     0.294    0.173    0.100    0.060       80%
+XRAY (xrs_long)           2016     0.240    0.139    0.068    0.031       87%
+MULTI (proton+xray)        288     0.924    0.881    0.806    0.660       29%
+MULTI (proton+xray)        864     0.935    0.881    0.793    0.645       31%
+MULTI (proton+xray)       2016     0.861    0.790    0.688    0.453       47%
+
+  track mean over lookbacks (best model per cell):
+    PROTON (p>10)          3 h=0.935  6 h=0.900  12 h=0.834  24 h=0.728
+    XRAY (xrs_long)        3 h=0.277  6 h=0.166  12 h=0.101  24 h=0.062
+    MULTI (proton+xray)    3 h=0.907  6 h=0.851  12 h=0.762  24 h=0.586
+
+==============================================================================
+B. segrnn_thuml vs EACH RIVAL — Wilcoxon signed-rank, one-sided (champ >)
+==============================================================================
+rival             n  median dHSS          p     Holm p    | per cell-fold:    n     Holm p
+------------------------------------------------------------------------------
+tsmixer          36        0.376   1.46e-11   1.31e-10 ***|                 180   1.23e-30
+frets            36        0.282   7.28e-11   5.82e-10 ***|                 180   1.08e-29
+patchtst         36        0.127   3.64e-10   2.55e-09 ***|                 180   1.83e-27
+dlinear          36        0.130   6.26e-10   3.75e-09 ***|                 180   2.48e-28
+patchmixer       36        0.106   6.26e-10   3.75e-09 ***|                 180   5.52e-26
+xpatch           30        0.053   4.66e-09   1.86e-08 ***|                 126   4.89e-18
+itransformer     36        0.074   7.80e-09   2.34e-08 ***|                 180   2.08e-25
+rlinear          36        0.088   5.42e-08   1.08e-07 ***|                 180   1.77e-23
+tide             36        0.087   2.44e-07   2.44e-07 ***|                 180   1.56e-21
+
+  Pairing is on the CELL (n=36, 5-fold mean) for the headline claim —
+  the cell-fold column (n=180) is more sensitive but its pairs are not
+  independent, so it is a supporting figure, not the reported test.
+
+==============================================================================
+C. CHAMPION COUNT ACROSS ALL 36 BASE-CELLS
+==============================================================================
+    segrnn_thuml    29/36
+    tide             5/36
+    rlinear          1/36
+    dlinear          1/36
+
+  by horizon:
+   model     dlinear  rlinear  segrnn_thuml  tide
+   pred_len                                      
+   3 h             0        0             9     0
+   6 h             0        0             8     1
+   12 h            0        1             6     2
+   24 h            1        0             6     2

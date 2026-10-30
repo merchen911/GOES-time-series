@@ -2,6 +2,15 @@
 
 **Date:** 2026-07-06
 
+> **v2.0.0 note.** This is the original design. Since v2.0.0 a run's result is a
+> `TrainResult` that holds an `evaluation` (regression and event rows) instead of a
+> `metrics` dict, and `build_comparison` returns two tables, regression and event
+> (`comparison_regression.csv`, `comparison_event.csv`), each with `strategy` and
+> `model` columns; `merge_comparisons` joins regression comparison tables. The
+> statistic runner evaluates and saves predictions the same way as the neural ones
+> (`pred/<model>.npz`). `statsmodels` is limited to `<0.15`. See
+> [`metrics.md`](metrics.md).
+
 ## Goal
 
 Let a single config flag `--forecast_strategy` select how a run produces its

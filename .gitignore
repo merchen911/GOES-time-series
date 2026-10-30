@@ -30,3 +30,6 @@ fold_sample_tables.*
 # --- Release artifacts: tracked despite the broad data ignores above ---
 !results/
 !results/*.csv
+!results/v1/
+!results/v1/**/
+!results/v1/**/*.csv

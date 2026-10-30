@@ -33,9 +33,25 @@ class Model(nn.Module):
         # would only ever be needed when NOT evenly divisible) without
         # actually zero-padding the tensor, making the reshape below
         # shape-invalid. Removed to match upstream.
+        if self.seq_len % self.seg_len:
+            raise ValueError(
+                f"SegRNN needs seg_len to divide seq_len exactly (the encoder "
+                f"reshape below is only shape-valid then), got seq_len="
+                f"{self.seq_len}, seg_len={self.seg_len}")
         self.seg_num_x = self.seq_len // self.seg_len
 
-        self.seg_num_y = max(self.pred_len // self.seg_len, 1)
+        # CEILING, not upstream's floor. Upstream requires seg_len to divide
+        # pred_len too and floor-divides, so an indivisible horizon silently
+        # produces seg_num_y*seg_len != pred_len values and dies on the reshape
+        # in encoder() (pred_len 36 at seg_len 24: "shape '[-1,1,36]' is
+        # invalid for input of size 48"). Decoding UP to the next whole segment
+        # and trimming the tail keeps seg_len a fixed hyperparameter across
+        # every horizon instead of making it a function of pred_len — the point
+        # matters for a horizon-scaling study, where a seg_len that moves with
+        # pred_len confounds the very axis being measured. The trimmed steps
+        # are never compared against a target, so they take no gradient.
+        self.seg_num_y = max(-(-self.pred_len // self.seg_len), 1)
+        self.dec_len = self.seg_num_y * self.seg_len
 
         # building model
         self.valueEmbedding = nn.Sequential(
@@ -84,7 +100,8 @@ class Model(nn.Module):
         _, hy = self.rnn(pos_emb, hn.repeat(1, 1, self.seg_num_y).view(1, -1, self.d_model)) # bcm,1,d  1,bcm,d
 
         # 1,bcm,d -> 1,bcm,w -> b,c,s
-        y = self.predict(hy).view(-1, self.enc_in, self.pred_len)
+        y = self.predict(hy).view(-1, self.enc_in, self.dec_len)
+        y = y[:, :, :self.pred_len]      # trim the over-decoded tail
 
         # permute and denorm
         y = y.permute(0, 2, 1) + seq_last

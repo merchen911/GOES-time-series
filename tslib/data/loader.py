@@ -83,12 +83,18 @@ def _prepare_series(df, time_col, target_col, role, transform, role_col="role"):
 
 
 def _grid_and_starts(data, terms, cadence_min, seq_len, pred_len, split_type,
-                     transform="none", min_bin_count=1):
+                     transform="none", min_bin_count=1, return_times=False):
+    """Concatenated per-term grids and the gap-free window starts on them.
+
+    Returns `(values, starts)`. With `return_times=True` returns
+    `(values, starts, forecast_start_ns)`, where `forecast_start_ns[i]` is the
+    time of the first forecast bin of the window at `starts[i]`
+    (`seq_len` bins after the start), int64 nanoseconds UTC."""
     frame = data.to_frame() if isinstance(data, pd.Series) else data
     L = seq_len + pred_len
     rule = f"{cadence_min}min"
     labels = _term_labels(frame.index, split_type)
-    all_vals, all_starts, offset = [], [], 0
+    all_vals, all_starts, all_times, offset = [], [], [], 0
     for term in sorted(terms):
         sub = frame[labels == term]
         if sub.empty:
@@ -107,11 +113,17 @@ def _grid_and_starts(data, terms, cadence_min, seq_len, pred_len, split_type,
         all_vals.append(vals)
         if len(starts):
             all_starts.append(starts + offset)
+            if return_times:
+                # pandas >= 3 indexes may be datetime64[us]; .asi8 is in the index unit
+                all_times.append(mean.index.as_unit("ns").asi8[starts + seq_len])
         offset += len(vals)
     C = frame.shape[1]
     values = np.concatenate(all_vals) if all_vals else np.empty((0, C), dtype="float64")
     starts = np.concatenate(all_starts) if all_starts else np.empty(0, dtype=np.int64)
-    return values, starts
+    if not return_times:
+        return values, starts
+    times = np.concatenate(all_times) if all_times else np.empty(0, dtype=np.int64)
+    return values, starts, times
 
 
 class SequenceDataset(Dataset):
@@ -161,6 +173,8 @@ class DataBundle:
     output_size: int = 1
     target_indices: List[int] = field(default_factory=list)
     target_cols: List[str] = field(default_factory=list)
+    # int64 ns UTC of each test window's first forecast bin, in test_loader order
+    test_forecast_start: np.ndarray | None = None
 
     def __post_init__(self) -> None:
         # keep target_indices authoritative; default to [target_index]
@@ -212,6 +226,15 @@ def _fold_indices(n_term: int, n_fold: int, fold_numb: int) -> Dict[str, np.ndar
     return {"train": tr_idx, "val": vl_idx, "test": ts_idx}
 
 
+def _ns_utc(times) -> np.ndarray:
+    """int64 ns UTC of a time column (naive times are taken as UTC, like the
+    parquet path); `as_unit("ns")` because pandas >= 3 parses to datetime64[us]."""
+    idx = pd.DatetimeIndex(pd.to_datetime(times))
+    if idx.tz is not None:
+        idx = idx.tz_convert("UTC")
+    return np.asarray(idx.as_unit("ns").asi8, dtype=np.int64)
+
+
 class DataModule:
     """legacy/2026의 DataModule 흐름을 단순화해 반영한 모듈."""
 
@@ -240,6 +263,11 @@ class DataModule:
             feature_cols = self.config.feature_cols
 
         use_cols = feature_cols + [self.config.target_col]
+        seq_len = self.config.seq_len
+        # Each test window's first forecast time (int64 ns UTC), when the CSV
+        # has a time column: it gives the run its `day` rows and makes its
+        # prediction file self-contained. Without one, both are skipped.
+        test_forecast_start = None
         if self.config.split_type == "ratio":
             values = df[use_cols].to_numpy(dtype=np.float32)
             x, y = _build_windows(values, self.config.seq_len, self.config.pred_len)
@@ -249,6 +277,10 @@ class DataModule:
             tr = SequenceDataset(x[splits["train"]], y[splits["train"]])
             va = SequenceDataset(x[splits["val"]], y[splits["val"]])
             te = SequenceDataset(x[splits["test"]], y[splits["test"]])
+            if self.config.time_col:
+                # window i forecasts from row i + seq_len on
+                starts = _ns_utc(df[self.config.time_col])[seq_len:seq_len + len(x)]
+                test_forecast_start = starts[splits["test"]]
         else:
             # legacy/2026 방식: term(year/year_half) 단위 회전식 k-fold
             term_df = _add_term_column(df, self.config.time_col, self.config.split_type)
@@ -262,6 +294,7 @@ class DataModule:
 
             x_parts = {"train": [], "val": [], "test": []}
             y_parts = {"train": [], "val": [], "test": []}
+            test_starts = []
             split_terms = {
                 k: [terms[i] for i in idxs.tolist()] for k, idxs in fold_map.items()
             }
@@ -277,6 +310,9 @@ class DataModule:
                     y_sub = y_sub[:, :, -1:]
                     x_parts[split_name].append(x_sub)
                     y_parts[split_name].append(y_sub)
+                    if split_name == "test":
+                        times = _ns_utc(sub[self.config.time_col])
+                        test_starts.append(times[seq_len:seq_len + len(x_sub)])
 
             def _concat_or_empty(parts):
                 if parts:
@@ -299,6 +335,9 @@ class DataModule:
             tr = SequenceDataset(x_tr, y_tr)
             va = SequenceDataset(x_va, y_va)
             te = SequenceDataset(x_te, y_te)
+            # term k-fold always has a time column (config_postprocess)
+            test_forecast_start = (np.concatenate(test_starts) if test_starts
+                                   else np.empty(0, dtype=np.int64))
 
         return DataBundle(
             train_loader=DataLoader(
@@ -315,6 +354,8 @@ class DataModule:
             ),
             input_size=len(use_cols),
             target_index=len(use_cols) - 1,
+            target_cols=[self.config.target_col],
+            test_forecast_start=test_forecast_start,
         )
 
     def _setup_parquet(self) -> DataBundle:
@@ -340,10 +381,15 @@ class DataModule:
         target_idx = [cols.index(t) for t in target_cols]
 
         loaders = {}
+        test_forecast_start = None
         for name in ("train", "val", "test"):
-            values, starts = _grid_and_starts(
+            out = _grid_and_starts(
                 frame, split_terms[name], cfg.cadence_min, cfg.seq_len, cfg.pred_len,
-                cfg.split_type, transform=cfg.transform, min_bin_count=cfg.min_bin_count)
+                cfg.split_type, transform=cfg.transform, min_bin_count=cfg.min_bin_count,
+                return_times=(name == "test"))
+            values, starts = out[:2]
+            if name == "test":
+                test_forecast_start = out[2]
             ds = WindowDataset(values, starts, cfg.seq_len, cfg.pred_len,
                                target_idx=target_idx)
             print(f"[DataModule] {name}: {len(split_terms[name])} terms, "
@@ -357,4 +403,5 @@ class DataModule:
             train_loader=loaders["train"], val_loader=loaders["val"],
             test_loader=loaders["test"], input_size=len(cols),
             target_index=target_idx[0], output_size=len(target_cols),
-            target_indices=target_idx, target_cols=target_cols)
+            target_indices=target_idx, target_cols=target_cols,
+            test_forecast_start=test_forecast_start)

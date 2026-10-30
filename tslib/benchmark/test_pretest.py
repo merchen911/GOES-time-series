@@ -26,6 +26,32 @@ class TestDecide(unittest.TestCase):
         self.assertTrue(pretest.decide(20.0, 12.0, lambda h: True))
 
 
+class TestPretestGrid(unittest.TestCase):
+    def test_manifest_never_approves_an_excluded_model(self):
+        # the manifest feeds `driver --manifest`, so it must hold the sweep's
+        # grid: xPatch is not probed (or approved) at the 7-day input
+        import contextlib
+        import io
+        from types import SimpleNamespace
+        from unittest import mock
+        written = {}
+        bundle = SimpleNamespace(train_loader=[0] * 10, input_size=1, target_indices=[0])
+        with tempfile.TemporaryDirectory() as d, \
+                mock.patch.object(pretest, "DataModule") as DM, \
+                mock.patch.object(pretest, "build_model"), \
+                mock.patch.object(pretest, "probe_sec_per_batch", return_value=0.01), \
+                mock.patch.object(pretest, "write_manifest",
+                                  lambda approved, params, out: written.update(a=approved)), \
+                contextlib.redirect_stdout(io.StringIO()):
+            DM.return_value.setup.return_value = bundle
+            pretest.main(["--tracks", "uni_a", "--seq-lens", "864", "2016",
+                          "--pred-lens", "36", "--out", str(Path(d) / "m.json")])
+        approved = {(e["seq_len"], e["model"]) for e in written["a"]}
+        self.assertIn((864, "xpatch"), approved)
+        self.assertNotIn((2016, "xpatch"), approved)
+        self.assertIn((2016, "dlinear"), approved)
+
+
 class TestManifestRoundTrip(unittest.TestCase):
     def test_write_then_group(self):
         from tslib.benchmark import driver

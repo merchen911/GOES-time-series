@@ -94,6 +94,61 @@ class TestGridAndStarts(unittest.TestCase):
         # valid starts per term: [0,1], second term +4 -> [4,5]
         np.testing.assert_array_equal(starts, np.array([0, 1, 4, 5]))
 
+    def test_forecast_start_matches_window(self):
+        # same synthetic series as test_gap_breaks_windows (one missing bin), seq_len=2, pred_len=1
+        t = ["2020-01-01T00:00", "2020-01-01T00:05", "2020-01-01T00:15",
+             "2020-01-01T00:20", "2020-01-01T00:25", "2020-01-01T00:30"]
+        s = self._series(t, [1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+        values, starts, fs = _grid_and_starts(s, ["2020-H1"], 5, 2, 1, "year_half",
+                                              return_times=True)
+        np.testing.assert_array_equal(starts, np.array([3, 4]))
+        self.assertEqual(fs.dtype, np.int64)
+        self.assertEqual(len(fs), len(starts))
+        t0 = pd.Timestamp("2020-01-01T00:00", tz="UTC").value      # first grid time, ns
+        step = 5 * 60 * 10**9
+        # first forecast bin of a window = window start + seq_len bins
+        np.testing.assert_array_equal(fs, t0 + (starts + 2) * step)
+
+    def test_forecast_start_restarts_grid_per_term(self):
+        # two terms with different grid origins: each term's times come from its own grid
+        t1 = pd.date_range("2020-06-29", periods=4, freq="5min", tz="UTC")   # H1
+        t2 = pd.date_range("2020-07-01", periods=4, freq="5min", tz="UTC")   # H2
+        s = pd.Series(np.arange(8.0), index=t1.append(t2), dtype="float64")
+        values, starts, fs = _grid_and_starts(s, ["2020-H1", "2020-H2"], 5, 2, 1,
+                                              "year_half", return_times=True)
+        np.testing.assert_array_equal(starts, np.array([0, 1, 4, 5]))
+        step = 5 * 60 * 10**9
+        h1 = pd.Timestamp("2020-06-29", tz="UTC").value
+        h2 = pd.Timestamp("2020-07-01", tz="UTC").value
+        np.testing.assert_array_equal(fs, np.array([h1 + 2 * step, h1 + 3 * step,
+                                                    h2 + 2 * step, h2 + 3 * step]))
+
+    def test_forecast_start_is_ns_from_us_index(self):
+        # pandas 3 indexes are datetime64[us]; .asi8 would give microseconds
+        idx = pd.date_range("2020-01-01", periods=6, freq="5min", tz="UTC").as_unit("us")
+        self.assertEqual(idx.dtype, "datetime64[us, UTC]")
+        s = pd.Series(np.arange(6.0), index=idx, dtype="float64")
+        values, starts, fs = _grid_and_starts(s, ["2020-H1"], 5, 2, 1, "year_half",
+                                              return_times=True)
+        self.assertEqual(len(fs), 4)
+        self.assertEqual(int(np.diff(fs).min()), 5 * 60 * 10**9)
+        self.assertEqual(int(fs[0]), pd.Timestamp("2020-01-01T00:10", tz="UTC").value)
+
+    def test_forecast_start_empty_when_no_windows(self):
+        idx = pd.date_range("2020-01-01", periods=2, freq="5min", tz="UTC")
+        s = pd.Series([1.0, 2.0], index=idx, dtype="float64")
+        values, starts, fs = _grid_and_starts(s, ["2020-H1"], 5, 2, 1, "year_half",
+                                              return_times=True)
+        self.assertEqual(len(starts), 0)
+        self.assertEqual(fs.dtype, np.int64)
+        self.assertEqual(len(fs), 0)
+
+    def test_default_return_is_still_two_tuple(self):
+        idx = pd.date_range("2020-01-01", periods=6, freq="5min", tz="UTC")
+        s = pd.Series(np.arange(6.0), index=idx, dtype="float64")
+        out = _grid_and_starts(s, ["2020-H1"], 5, 2, 1, "year_half")
+        self.assertEqual(len(out), 2)
+
 
 class TestWindowDataset(unittest.TestCase):
     def test_shapes_and_values(self):
@@ -315,3 +370,91 @@ class TestDataBundleTargetCols(unittest.TestCase):
         b = DataBundle(train_loader=None, val_loader=None, test_loader=None,
                        input_size=1, target_index=0)
         self.assertEqual(b.target_cols, [])
+
+    def test_test_forecast_start_default_none(self):
+        from tslib.data.loader import DataBundle
+        b = DataBundle(train_loader=None, val_loader=None, test_loader=None,
+                       input_size=1, target_index=0)
+        self.assertIsNone(b.test_forecast_start)
+
+
+@unittest.skipUnless(os.path.exists(XRAY), "real parquet not present")
+class TestBundleForecastStart(unittest.TestCase):
+    def test_bundle_has_test_forecast_start(self):
+        from tslib.exp.granularity import day_indices
+        # uni_b, seq 288, pred 144, fold 0
+        b = DataModule(_cfg_mv(data_path=XRAY, target_col="xrs_long",
+                               seq_len=288, pred_len=144)).setup()
+        fs = b.test_forecast_start
+        self.assertEqual(fs.dtype, np.int64)
+        self.assertEqual(len(fs), len(b.test_loader.dataset))
+        self.assertEqual(len(fs), 229_132)
+        self.assertTrue((np.diff(fs) > 0).all())                  # strictly increasing
+        self.assertEqual(len(day_indices(fs)), 876)               # 24 h greedy cut
+
+
+def _csv_cfg(path, **kw):
+    base = dict(data_path=path, target_col="flux", time_col="time", feature_cols=None,
+                split_type="ratio", train_ratio=0.6, val_ratio=0.2, n_fold=3, fold_numb=0,
+                seq_len=4, pred_len=2, batch_size=8, shuffle_train=False, num_workers=0)
+    base.update(kw)
+    return _NS(**base)
+
+
+class TestSetupCsv(unittest.TestCase):
+    """The generic CSV path names its target channel and, with --time_col, keeps
+    each test window's forecast start, so CSV runs get `day` rows and a
+    prediction file like parquet runs."""
+
+    def _write(self, d, times):
+        # flux = row number, so a window's first target value names its row
+        path = os.path.join(d, "toy.csv")
+        pd.DataFrame({"time": times, "flux": np.arange(len(times), dtype=float)}).to_csv(
+            path, index=False)
+        return path, pd.DatetimeIndex(pd.to_datetime(times)).as_unit("ns").asi8
+
+    def _assert_aligned(self, bundle, row_ns):
+        ys = np.concatenate([y.numpy() for _, y in bundle.test_loader])
+        fs = bundle.test_forecast_start
+        self.assertEqual(fs.dtype, np.int64)
+        self.assertEqual(len(fs), len(ys))
+        self.assertGreater(len(fs), 0)
+        # each window's first forecast value is the flux of the row whose time is its start
+        np.testing.assert_array_equal(fs, row_ns[ys[:, 0, 0].astype(int)])
+
+    def test_ratio_split_with_time_col(self):
+        from tslib.data.loader import DataModule as DM
+        with tempfile.TemporaryDirectory() as d:
+            times = pd.date_range("2020-01-01", periods=60, freq="5min").astype(str)
+            path, row_ns = self._write(d, times)
+            b = DM(_csv_cfg(path)).setup()
+        self.assertEqual(b.target_cols, ["flux"])
+        self._assert_aligned(b, row_ns)
+
+    def test_year_kfold_with_time_col(self):
+        from tslib.data.loader import DataModule as DM
+        with tempfile.TemporaryDirectory() as d:
+            times = pd.date_range("2019-01-01", "2021-12-31", freq="7D").astype(str)
+            path, row_ns = self._write(d, times)
+            b = DM(_csv_cfg(path, split_type="year")).setup()
+        self.assertEqual(b.target_cols, ["flux"])
+        self._assert_aligned(b, row_ns)
+
+    def test_tz_aware_times_are_utc(self):
+        from tslib.data.loader import DataModule as DM
+        with tempfile.TemporaryDirectory() as d:
+            times = [t.isoformat() for t in
+                     pd.date_range("2020-01-01 09:00", periods=40, freq="h", tz="Asia/Seoul")]
+            path, _ = self._write(d, times)
+            b = DM(_csv_cfg(path)).setup()
+        first = pd.Timestamp(int(b.test_forecast_start[0]), unit="ns", tz="UTC")
+        self.assertEqual(first.hour, (0 + 28 + 4) % 24)   # row 28 + seq_len 4 at 09:00 KST = 00:00 UTC
+
+    def test_without_time_col_no_forecast_start(self):
+        from tslib.data.loader import DataModule as DM
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "toy.csv")
+            pd.DataFrame({"flux": np.arange(60, dtype=float)}).to_csv(path, index=False)
+            b = DM(_csv_cfg(path, time_col=None)).setup()
+        self.assertEqual(b.target_cols, ["flux"])
+        self.assertIsNone(b.test_forecast_start)

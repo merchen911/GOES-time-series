@@ -19,7 +19,9 @@ framework.
 Existing flags cover data (`--channels`, `--target_cols`, `--transform`,
 `--min_bin_count`), windows (`--seq_len`, `--pred_len`, `--cadence_min`), the
 split (`--split_type`, `--n_fold`, `--fold_numb`), modeling (`--loss`,
-`--metrics`, `--event_threshold`, `--sort_metric`, `--models`), and strategy
+`--metrics`, `--event_threshold`, `--sort_metric`, `--models`), output
+(`--runs_root`, `--run_name`, `--save_predictions`, off with
+`--no-save_predictions`), and strategy
 (`--forecast_strategy`; `--arima_order` and `--ar_lags` apply only to the
 `statistic` strategy).
 

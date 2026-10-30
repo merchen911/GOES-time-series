@@ -4,6 +4,17 @@
 **Module:** `tslib/model/` registries
 **Status:** approved, pre-implementation
 
+> **v2.0.0 note.** The metrics part of this design (section 5 and the comparison
+> table in section 6) was replaced in v2.0.0; the text below is kept as the history
+> of the original design. There is no single `METRIC_REGISTRY`, `register_metric`
+> or `run_metrics` any more, and no `mse` metric (the `mse` loss stays). Event
+> scores register with `register_event_score` (a function of the contingency counts
+> `tp, fp, fn, tn`) and regression metrics with `register_regression_metric`; the
+> evaluation (`tslib/exp/evaluate.py`) computes every registered metric. Results
+> are one row per channel (no `tss_<channel>` columns) in two tables,
+> `results_regression.csv` and `results_event.csv`. See
+> [`metrics.md`](metrics.md) and [`tslib/exp/README.md`](../tslib/exp/README.md).
+
 ## 1. Goal
 
 Move the framework into its modeling phase with a code structure built for

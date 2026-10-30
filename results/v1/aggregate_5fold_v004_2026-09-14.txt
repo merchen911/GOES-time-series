@@ -1,0 +1,70 @@
+# results_master rows: 870  | folds/cell: min=5 max=5
+# metric: HSS (primary per track), mean over folds, 95% CI = t_{n-1}
+
+================================================================================================
+A. PER-CELL CHAMPION  (mean HSS [95% CI]; 'overlap' = runner-up CI overlaps champion's)
+================================================================================================
+track   seq pred nf  champion      HSS mean             95% CI  runner-up         gap ov?
+-----------------------------------------------------------------------------------------
+multi   288   36  5  segrnn_thuml     0.924      [0.885,0.964]  xpatch          0.047 YES
+multi   288   72  5  segrnn_thuml     0.881      [0.823,0.938]  xpatch          0.028 YES
+multi   864   36  5  segrnn_thuml     0.935      [0.902,0.968]  xpatch          0.078 YES
+multi   864   72  5  segrnn_thuml     0.881      [0.816,0.947]  xpatch          0.054 YES
+multi  2016   36  5  segrnn_thuml     0.861      [0.719,1.002]  rlinear         0.211 YES
+multi  2016   72  5  segrnn_thuml     0.790      [0.582,0.998]  tide            0.226 YES
+uni_a   288   36  5  segrnn_thuml     0.938      [0.921,0.955]  tide            0.016 YES
+uni_a   288   72  5  segrnn_thuml     0.905      [0.881,0.929]  itransformer    0.021 YES
+uni_a   864   36  5  segrnn_thuml     0.939      [0.929,0.949]  itransformer    0.034 -
+uni_a   864   72  5  segrnn_thuml     0.908      [0.893,0.923]  xpatch          0.041 YES
+uni_a  2016   36  5  segrnn_thuml     0.928      [0.888,0.968]  itransformer    0.319 YES
+uni_a  2016   72  5  segrnn_thuml     0.888      [0.847,0.930]  itransformer    0.230 -
+uni_b   288   36  5  segrnn_thuml     0.298      [0.183,0.413]  itransformer    0.013 YES
+uni_b   288   72  5  tide             0.187      [0.065,0.309]  segrnn_thuml    0.004 YES
+uni_b   864   36  5  segrnn_thuml     0.294      [0.183,0.404]  tide            0.023 YES
+uni_b   864   72  5  segrnn_thuml     0.173      [0.093,0.254]  tide            0.015 YES
+uni_b  2016   36  5  segrnn_thuml     0.240      [0.144,0.337]  tide            0.007 YES
+uni_b  2016   72  5  segrnn_thuml     0.139      [0.081,0.196]  tide            0.005 YES
+
+======================================================================
+B. MODEL STANDINGS  (across 18 base-cells, primary HSS)
+======================================================================
+model           #wins/18  avg_rank  cells
+------------------------------------------
+segrnn_thuml          17      1.06     18
+tide                   1      3.61     18
+xpatch                 0      4.17     12
+itransformer           0      4.28     18
+rlinear                0      4.33     18
+patchmixer             0      5.33     18
+dlinear                0      5.89     18
+patchtst               0      6.44     18
+frets                  0      8.78     18
+tsmixer                0      9.17     18
+
+======================================================================
+C. TRACK DIFFICULTY  (best-model mean HSS per track, averaged over its 6 cells)
+======================================================================
+  PROTON (p>10)          best-model mean HSS = 0.918 (range 0.888–0.939)
+  XRAY (xrs_long)        best-model mean HSS = 0.222 (range 0.139–0.298)
+  MULTI (proton+xray)    best-model mean HSS = 0.879 (range 0.790–0.935)   | its XRAY HSS ~ 0.291 (best cell)
+
+======================================================================
+D. STATISTICALLY TIED CELLS  (champion CI overlaps runner-up -> needs Wilcoxon on full 5 folds)
+======================================================================
+  16/18 base-cells are statistically tied at 95% CI:
+    - multi/seq288/pred36 (champ=segrnn_thuml)
+    - multi/seq288/pred72 (champ=segrnn_thuml)
+    - multi/seq864/pred36 (champ=segrnn_thuml)
+    - multi/seq864/pred72 (champ=segrnn_thuml)
+    - multi/seq2016/pred36 (champ=segrnn_thuml)
+    - multi/seq2016/pred72 (champ=segrnn_thuml)
+    - uni_a/seq288/pred36 (champ=segrnn_thuml)
+    - uni_a/seq288/pred72 (champ=segrnn_thuml)
+    - uni_a/seq864/pred72 (champ=segrnn_thuml)
+    - uni_a/seq2016/pred36 (champ=segrnn_thuml)
+    - uni_b/seq288/pred36 (champ=segrnn_thuml)
+    - uni_b/seq288/pred72 (champ=tide)
+    - uni_b/seq864/pred36 (champ=segrnn_thuml)
+    - uni_b/seq864/pred72 (champ=segrnn_thuml)
+    - uni_b/seq2016/pred36 (champ=segrnn_thuml)
+    - uni_b/seq2016/pred72 (champ=segrnn_thuml)

@@ -4,6 +4,16 @@
 exists in v003 — a real `pytorch_lightning` `Trainer`/`LightningModule` pair,
 replacing v002's hand-rolled training loop.
 
+> **v2.0.0 note.** `on_test_epoch_end` no longer calls `run_metrics` or sets
+> `module.test_metrics`: it keeps the concatenated test predictions and
+> observations and runs `evaluate` (`tslib/exp/evaluate.py`), which fills
+> `TrainResult.evaluation` (per-channel regression rows and per-channel,
+> per-aggregation-unit event rows); `TrainResult` no longer has `metrics`, `skipped`
+> or `est_train_hours`. The predictions are then saved to `pred/<model>.npz`. The
+> comparison table is now two tables, `comparison_regression.csv` and
+> `comparison_event.csv`. See [`metrics.md`](metrics.md). The text below describes
+> the v003 architecture as it was.
+
 ## Why
 
 v002's `pl_model` was a hand-written training loop: its own `for epoch in

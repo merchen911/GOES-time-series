@@ -1,25 +1,23 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List
+from typing import List, Optional
 
 import numpy as np
 import torch
 import pytorch_lightning as pl
 
+from tslib.exp.evaluate import Evaluation, evaluate
 from tslib.exp.losses import build_loss
-from tslib.exp.metrics import run_metrics
 
 
 @dataclass
 class TrainResult:
     model_name: str
     best_val_loss: float
-    metrics: Dict[str, float]
+    evaluation: Evaluation
     ckpt_path: str
     strategy: str = "direct"
-    skipped: bool = False
-    est_train_hours: float = float("nan")
 
 
 class ForecastModule(pl.LightningModule):
@@ -39,7 +37,11 @@ class ForecastModule(pl.LightningModule):
         self.criterion = build_loss(config)
         self._test_pred: List[np.ndarray] = []
         self._test_true: List[np.ndarray] = []
-        self.test_metrics: Dict[str, float] = {}
+        # set by on_test_epoch_end: the whole test set (N, pred_len, T) and its
+        # evaluation; the caller saves the arrays and then drops them
+        self.test_pred: Optional[np.ndarray] = None
+        self.test_true: Optional[np.ndarray] = None
+        self.evaluation: Optional[Evaluation] = None
 
     def forward(self, x):
         return self.model(x)
@@ -65,12 +67,13 @@ class ForecastModule(pl.LightningModule):
         self._test_true.append(y.detach().cpu().numpy())
 
     def on_test_epoch_end(self):
-        pred = np.concatenate(self._test_pred, axis=0)
-        true = np.concatenate(self._test_true, axis=0)
-        self.test_metrics = run_metrics(pred, true, self.metric_ctx,
-                                        self.config.metrics)
+        self.test_pred = np.concatenate(self._test_pred, axis=0)
+        self.test_true = np.concatenate(self._test_true, axis=0)
         self._test_pred.clear()
         self._test_true.clear()
+        # metrics=None evaluates every registered metric
+        self.evaluation = evaluate(self.test_pred, self.test_true, self.metric_ctx,
+                                   getattr(self.config, "metrics", None))
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.model.parameters(), lr=self.config.lr,

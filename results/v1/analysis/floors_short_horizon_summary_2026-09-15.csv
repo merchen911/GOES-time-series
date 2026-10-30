@@ -1,0 +1,25 @@
+track,horizon,pred,model,gran,HSS_mean,HSS_ci,HSS_nfold,TSS_mean,TSS_ci,TSS_nfold,SEDI_mean,SEDI_ci,SEDI_nfold,base_mean,base_ci,base_nfold
+XRS M-class,3h,36,flat-value persistence,per-window,0.2744,0.0524,5.0,0.169,0.0371,5.0,0.6028,0.0438,5.0,0.0441,0.0174,5.0
+XRS M-class,3h,36,flat-value persistence,per-day,0.2558,0.1384,5.0,0.1572,0.0952,5.0,0.5185,0.0,2.0,0.0452,0.0181,5.0
+XRS M-class,3h,36,occurrence-persistence,per-window,0.33,0.0554,5.0,0.3306,0.055,5.0,0.5822,0.0532,5.0,0.0441,0.0174,5.0
+XRS M-class,3h,36,occurrence-persistence,per-day,0.341,0.092,5.0,0.3286,0.0808,5.0,0.5858,0.0915,5.0,0.0452,0.0181,5.0
+XRS M-class,6h,72,flat-value persistence,per-window,0.1782,0.0412,5.0,0.1058,0.0266,5.0,0.5298,0.0445,5.0,0.0722,0.0268,5.0
+XRS M-class,6h,72,flat-value persistence,per-day,0.2208,0.0573,5.0,0.1328,0.0378,5.0,,,0.0,0.0719,0.0287,5.0
+XRS M-class,6h,72,occurrence-persistence,per-window,0.3806,0.0617,5.0,0.381,0.0625,5.0,0.6066,0.0562,5.0,0.0722,0.0268,5.0
+XRS M-class,6h,72,occurrence-persistence,per-day,0.3912,0.0755,5.0,0.3912,0.048,5.0,0.6194,0.05,5.0,0.0719,0.0287,5.0
+XRS X-class,3h,36,flat-value persistence,per-window,0.164,0.0486,5.0,0.0922,0.0308,5.0,0.6016,0.0441,5.0,0.003,0.0016,5.0
+XRS X-class,3h,36,flat-value persistence,per-day,0.0798,0.2215,5.0,0.05,0.1388,5.0,,,0.0,0.0031,0.0011,5.0
+XRS X-class,3h,36,occurrence-persistence,per-window,0.1028,0.0285,5.0,0.103,0.0287,5.0,0.4574,0.0521,5.0,0.003,0.0016,5.0
+XRS X-class,3h,36,occurrence-persistence,per-day,0.1124,0.3176,5.0,0.0984,0.278,5.0,0.833,,1.0,0.0031,0.0011,5.0
+XRS X-class,6h,72,flat-value persistence,per-window,0.0918,0.0327,5.0,0.0492,0.0186,5.0,0.5196,0.0409,5.0,0.0057,0.003,5.0
+XRS X-class,6h,72,flat-value persistence,per-day,0.205,0.2403,5.0,0.1252,0.1484,5.0,,,0.0,0.0078,0.0056,5.0
+XRS X-class,6h,72,occurrence-persistence,per-window,0.1192,0.1025,5.0,0.1196,0.1021,5.0,0.4206,0.1758,5.0,0.0057,0.003,5.0
+XRS X-class,6h,72,occurrence-persistence,per-day,0.2562,0.3383,5.0,0.234,0.303,5.0,0.737,0.0,3.0,0.0078,0.0056,5.0
+Proton SPE,3h,36,flat-value persistence,per-window,0.9166,0.0212,5.0,0.8528,0.0354,5.0,0.9722,0.0076,5.0,0.0325,0.0161,5.0
+Proton SPE,3h,36,flat-value persistence,per-day,0.9352,0.0518,5.0,0.8832,0.0913,5.0,,,0.0,0.0307,0.0156,5.0
+Proton SPE,3h,36,occurrence-persistence,per-window,0.9124,0.0149,5.0,0.9126,0.0184,5.0,0.9786,0.005,5.0,0.0325,0.0161,5.0
+Proton SPE,3h,36,occurrence-persistence,per-day,0.9254,0.0316,5.0,0.9544,0.0275,5.0,0.9898,0.007,5.0,0.0307,0.0156,5.0
+Proton SPE,6h,72,flat-value persistence,per-window,0.8752,0.0275,5.0,0.7864,0.0437,5.0,0.9574,0.0102,5.0,0.0352,0.0171,5.0
+Proton SPE,6h,72,flat-value persistence,per-day,0.868,0.0783,5.0,0.7814,0.1221,5.0,0.932,,1.0,0.0363,0.0176,5.0
+Proton SPE,6h,72,occurrence-persistence,per-window,0.853,0.029,5.0,0.8536,0.0327,5.0,0.9574,0.0112,5.0,0.0352,0.0171,5.0
+Proton SPE,6h,72,occurrence-persistence,per-day,0.8504,0.0526,5.0,0.8496,0.0884,5.0,0.9552,0.0317,5.0,0.0363,0.0176,5.0

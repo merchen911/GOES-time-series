@@ -6,6 +6,12 @@ def exp_parser() -> argparse.ArgumentParser:
 
     # experiment
     parser.add_argument("--run_name", type=str, default="default_run")
+    parser.add_argument("--runs_root", type=str, default="runs",
+                        help="directory that holds run directories. Relative "
+                             "to the working directory by default; give an "
+                             "absolute path to write a sweep somewhere else "
+                             "(e.g. a scratch root for a short-epoch pilot, so "
+                             "it cannot mark real sweep jobs as finished).")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--epochs", type=int, default=10000,
                         help="max epochs; training stops earlier via EarlyStopping")
@@ -139,9 +145,23 @@ def exp_parser() -> argparse.ArgumentParser:
 
     # modeling: pluggable loss / metrics
     parser.add_argument("--loss", type=str, default="mse")
-    parser.add_argument("--metrics", nargs="+", default=["mse", "mae"])
-    parser.add_argument("--event_threshold", nargs="*", type=float, default=None)
-    parser.add_argument("--sort_metric", type=str, default="best_val_loss")
+    parser.add_argument("--metrics", nargs="+", default=None,
+                        help="metrics to compute (default: every registered "
+                             "one); contingency counts are always recorded")
+    parser.add_argument("--event_threshold", nargs="*", type=float, default=None,
+                        help="event threshold per target, physical units; "
+                             "without it no event rows are written")
+    parser.add_argument("--sort_metric", type=str, default="best_val_loss",
+                        help="ranks the regression comparison table: "
+                             "best_val_loss or a regression metric except sspb")
+    parser.add_argument("--save_predictions", action=argparse.BooleanOptionalAction,
+                        default=True,
+                        help="write <runs_root>/<run_name>/pred/<model>.npz "
+                             "after testing")
+    # the underscore spelling, like every other flag (BooleanOptionalAction
+    # only makes --no-save_predictions)
+    parser.add_argument("--no_save_predictions", dest="save_predictions",
+                        action="store_false", help=argparse.SUPPRESS)
 
     return parser
 
@@ -176,22 +196,33 @@ def config_postprocess(config):
             and not str(config.data_path).endswith(".parquet")):
         raise ValueError("time-based k-fold requires --time_col.")
 
-    from tslib.exp.metrics import METRIC_REGISTRY
-    for m in config.metrics:
-        if m not in METRIC_REGISTRY:
-            raise ValueError(
-                f"unknown metric '{m}'; registered: {sorted(METRIC_REGISTRY)}")
-    event = [m for m in config.metrics
-             if METRIC_REGISTRY[m].kind == "event"]
-    if event:
+    from tslib.exp.metrics import EVENT_SCORES, REGRESSION_METRICS
+    registered = [*REGRESSION_METRICS, *EVENT_SCORES]
+    for m in config.metrics or []:
+        if m not in registered:
+            raise ValueError(f"unknown metric '{m}'; registered: {registered}")
+    event = [m for m in config.metrics or [] if m in EVENT_SCORES]
+    if event and not config.event_threshold:
+        raise ValueError(f"event metrics {event} require --event_threshold")
+    if config.event_threshold:
         n_targets = (len(config.target_cols)
                      if getattr(config, "target_cols", None) else 1)
-        if not config.event_threshold:
-            raise ValueError(f"event metrics {event} require --event_threshold")
         if len(config.event_threshold) != n_targets:
             raise ValueError(
                 f"--event_threshold length {len(config.event_threshold)} "
                 f"!= number of targets {n_targets}")
+    # sspb is signed with 0 best, so neither sort direction ranks models
+    sortable = ["best_val_loss", *(m for m in REGRESSION_METRICS if m != "sspb")]
+    if config.sort_metric not in sortable:
+        raise ValueError(
+            f"--sort_metric '{config.sort_metric}' cannot rank the regression "
+            f"table; choose one of {sortable}")
+    if (config.metrics is not None and config.sort_metric != "best_val_loss"
+            and config.sort_metric not in config.metrics):
+        raise ValueError(
+            f"--sort_metric '{config.sort_metric}' is not computed with "
+            f"--metrics {' '.join(config.metrics)}; add it to --metrics or sort "
+            f"by best_val_loss")
 
     strategy = getattr(config, "forecast_strategy", "direct")
     if strategy in ("direct", "recursive"):

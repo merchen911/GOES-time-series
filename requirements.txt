@@ -1,6 +1,6 @@
 numpy
 pandas
 torch
-statsmodels
+statsmodels<0.15
 pytorch_lightning
 einops

@@ -56,12 +56,20 @@ class TestModelingFlags(unittest.TestCase):
     def test_defaults(self):
         c = _parse()
         self.assertEqual(c.loss, "mse")
-        self.assertEqual(c.metrics, ["mse", "mae"])
         self.assertEqual(c.sort_metric, "best_val_loss")
 
-    def test_unknown_metric_errors(self):
-        with self.assertRaises(ValueError):
-            _parse("--metrics", "mse", "bogus")
+    def test_metrics_default_all(self):
+        # None selects every registered metric; with no explicit event metric
+        # no threshold is required (the event rows are then not written)
+        c = _parse()
+        self.assertIsNone(c.metrics)
+        self.assertIsNone(c.event_threshold)
+
+    def test_unknown_metric_errors_and_lists_registered(self):
+        # "mse" was a v1 metric; it is no longer registered
+        for bad in ("bogus", "mse"):
+            with self.assertRaisesRegex(ValueError, r"registered: .*rmse.*sedi"):
+                _parse("--metrics", "rmse", bad)
 
     def test_event_metric_requires_threshold(self):
         with self.assertRaises(ValueError):
@@ -74,9 +82,38 @@ class TestModelingFlags(unittest.TestCase):
                    "--target_cols", "p_gt10", "xrs_long",
                    "--metrics", "tss", "--event_threshold", "10")
 
+    def test_threshold_count_checked_without_explicit_event_metric(self):
+        # the default (every metric) includes the event scores
+        with self.assertRaises(ValueError):
+            _parse("--event_threshold", "10", "1e-5")
+
     def test_event_metric_ok_with_matching_threshold(self):
-        c = _parse("--metrics", "mse", "tss", "--event_threshold", "10")
+        c = _parse("--metrics", "rmse", "tss", "--event_threshold", "10")
         self.assertEqual(c.event_threshold, [10.0])
+
+    def test_sort_metric_rejects_sspb_and_event(self):
+        for bad in ("sspb", "hss", "tss_p_gt10", "mse"):
+            with self.assertRaisesRegex(ValueError, "sort_metric", msg=bad):
+                _parse("--sort_metric", bad)
+        for ok in ("rmse", "mae", "msa", "logr", "best_val_loss"):
+            self.assertEqual(_parse("--sort_metric", ok).sort_metric, ok)
+
+    def test_sort_metric_must_be_among_the_computed_metrics(self):
+        # a --metrics filter without the sort metric leaves an all-NaN sort
+        # column and an unranked table
+        with self.assertRaisesRegex(ValueError, "sort_metric 'rmse'.*--metrics"):
+            _parse("--metrics", "mae", "--sort_metric", "rmse")
+        self.assertEqual(_parse("--metrics", "mae", "rmse", "--sort_metric", "rmse").sort_metric,
+                         "rmse")
+        self.assertEqual(_parse("--metrics", "mae").sort_metric, "best_val_loss")
+        self.assertEqual(_parse("--sort_metric", "msa").sort_metric, "msa")   # no filter
+
+    def test_save_predictions_flag(self):
+        self.assertTrue(_parse().save_predictions)
+        self.assertFalse(_parse("--no-save_predictions").save_predictions)
+        self.assertTrue(_parse("--save_predictions").save_predictions)
+        # the underscore spelling of every other flag (and of spec 4.6) works too
+        self.assertFalse(_parse("--no_save_predictions").save_predictions)
 
 
 class TestForecastStrategy(unittest.TestCase):
@@ -165,3 +202,16 @@ class TestPretestAndEarlyStopFlags(unittest.TestCase):
         from tslib.configs.config import config_postprocess
         with self.assertRaises(ValueError):
             config_postprocess(self._args("--early_stop_patience", "0"))
+
+
+class TestRunsRootFlag(unittest.TestCase):
+    def _args(self, *extra):
+        return exp_parser().parse_args(
+            ["--data_path", "x.parquet", "--target_col", "p_gt10", *extra])
+
+    def test_default_is_runs(self):
+        self.assertEqual(self._args().runs_root, "runs")
+
+    def test_override(self):
+        self.assertEqual(self._args("--runs_root", "/scratch/pilot").runs_root,
+                         "/scratch/pilot")

@@ -105,7 +105,9 @@ def main(argv=None):
                                    args.folds, args.strategies)
     approved, rejected = [], 0
     for cell in cells:
-        models = driver.models_for(cell["track"], cell["strategy"])
+        models = driver.models_for_cell(cell)   # the sweep's grid: exclusions applied
+        if not models:
+            continue
         try:
             cfg = _config_for(cell, models[0], args.nominal_epochs)
             bundle = DataModule(cfg).setup()  # build_model sets enc_in/dec_in/c_out later

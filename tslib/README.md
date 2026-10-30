@@ -15,7 +15,7 @@ from tslib.model import build_model
 | [`configs/`](configs/) | CLI flags + validation (`exp_parser`, `config_postprocess`) | add a new option |
 | [`data/`](data/) | parquet loading, half-year split, common-grid channel join | add / wire a new time series (channel) |
 | [`model/`](model/) | backbone registry + forecast adapter | add a model architecture |
-| [`exp/`](exp/) | training loop, pluggable **losses** and **metrics**, comparison table | add a loss or an evaluation metric |
+| [`exp/`](exp/) | training loop, pluggable **losses** and **metrics**, regression/event evaluation, prediction files, comparison tables | add a loss or an evaluation metric |
 | [`preprocessing/`](preprocessing/) | term-split, fold-sample counting, table generation | add an offline analysis/prep script |
 
 Each subpackage has its own `README.md` with the concrete steps. Below is the
@@ -33,5 +33,9 @@ If the new series is a parquet with the standard schema
 loader. → [`data/README.md`](data/)
 
 ## Add a loss or metric
-Decorate a function with `@register_loss(...)` or `@register_metric(...)` and
-select it with `--loss` / `--metrics`. → [`exp/README.md`](exp/)
+Decorate a function with `@register_loss(...)` and select it with `--loss`. A
+metric has two registries: `@register_event_score(...)` for a score of the 2x2
+contingency counts and `@register_regression_metric(...)` for a per-channel
+regression metric (names must not contain `_`); every registered metric is
+computed for each run and `--metrics` only filters. → [`exp/README.md`](exp/),
+definitions in [`../docs/metrics.md`](../docs/metrics.md)

@@ -12,8 +12,8 @@ authors:
   - family-names: Baek
     given-names: Ji-Hye
     affiliation: "Korea Astronomy and Space Science Institute; University of Science and Technology (UST)"
-version: 1.0.0
-date-released: 2026-09-28
+version: 2.0.0
+date-released: 2026-10-30
 license: Apache-2.0
 repository-code: "https://github.com/merchen911/GOES-time-series"
 keywords:
