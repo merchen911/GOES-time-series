@@ -129,12 +129,14 @@ formula has no value, it is `NaN` (the NaN column of the tables above).
   window the 24-hour cut dropped: the channel is voided as a whole, not unit by
   unit. In v1 a NaN prediction was counted as "no event" and scored 0.0.
 - **Nothing is rounded.** Scores are stored and averaged unrounded.
-- **Averages leave NaN out.** The README leaderboard averages the per-run values
-  of a model and skips NaN ones; each cell shows `k/n` when only k of the n runs
-  of its forecast length (folds x input lengths) have a value, so a model is not
-  rewarded for undefined scores. A model with fewer runs than that (xPatch, left
-  out at the 7-day input) is marked with a dagger and footnoted, because its
-  means are over other inputs than the other rows'.
+- **Averages leave NaN out.** The leaderboard (the README summary and
+  `results/LEADERBOARD.md`) averages the per-run values of a model and skips NaN
+  ones, so a model is not rewarded for undefined scores. In the full tables a cell
+  shows `k/n` when only k of the n runs of its forecast length (folds x input
+  lengths) have a value; the README summary shows `k/n` only when some of the
+  model's own runs are undefined. A model with fewer runs than its forecast
+  length's grid (xPatch, left out at the 7-day input) is marked with a dagger and
+  footnoted in both, because its means are over other inputs than the other rows'.
 
 ## 5. Result files
 

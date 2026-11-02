@@ -1,5 +1,12 @@
-"""The per-horizon leaderboard (spec 4.9, D9): one section per forecast length,
-one table per track, built from the two v2 result tables.
+"""The leaderboard, built from the two v2 result tables, in two forms.
+
+`summary_html` is the README's summary: one regression table (RMSE) and one
+classification table (per-day HSS) for the univariate tracks, with a two-row
+header that groups the four forecast lengths under each channel. Forecast
+lengths are never averaged together.
+
+`leaderboard_markdown` is the full leaderboard (spec 4.9, D9): one section per
+forecast length, one table per track, every shown metric.
 
 A cell is the mean, over every fold and input length that ran at that forecast
 length, of the run's own value. Runs whose value is NaN are left out of the
@@ -13,6 +20,7 @@ track and, per channel, the event scores at the `day` granularity; rows are
 ordered by the first channel's rmse."""
 from __future__ import annotations
 
+from html import escape
 from typing import Dict, FrozenSet, List, Tuple
 
 import pandas as pd
@@ -48,6 +56,17 @@ DISP = {"segrnn_thuml": "SegRNN", "xpatch": "xPatch", "itransformer": "iTransfor
 # minutes per input step (the 5-minute grid); names the input lengths in notes
 CADENCE_MIN = 5
 SHORT_MARK = "\u2020"   # dagger: a model with fewer runs than its table's grid
+
+# The README summary: the univariate tracks as (track, channel), and per table
+# (title, which result table, metric, lower is better, channel group labels).
+SUMMARY_TRACKS = (("uni_b", "xrs_long"), ("uni_a", "p_gt10"))
+SUMMARY_TABLES = (
+    ("Regression — RMSE of log10 flux (lower is better)", "regression", "rmse", True,
+     ("SXR 1–8 Å", "Proton ≥10 MeV")),
+    ("Classification — HSS, one forecast per day (higher is better)", "event", "hss",
+     False, ("SXR ≥ M-class", "Proton ≥ 10 pfu")),
+)
+NO_VALUE = "–"     # en dash: no run at this forecast length
 
 # header, per-model mean, per-model defined values, per-model rows
 _Column = Tuple[str, pd.Series, pd.Series, pd.Series]
@@ -88,6 +107,80 @@ def leaderboard_markdown(reg: pd.DataFrame, evt: pd.DataFrame) -> str:
         parts += _footnotes(shortfalls, listed, n_dropped)
         sections.append("\n\n".join(parts))
     return "\n\n".join(sections)
+
+
+def summary_html(reg: pd.DataFrame, evt: pd.DataFrame) -> str:
+    """The README summary: for each of `SUMMARY_TABLES` a bold title and an HTML
+    table of the univariate tracks, one column per channel and forecast length
+    under a two-row header, all text small; then one footnote per model that
+    has fewer runs than its column's grid.
+
+    Rows are the models in alphabetical order of their shown names, and the
+    best value of each column is bold. A cell is the mean, over the folds and
+    input lengths at that forecast length, of the model's values, with `(k/n)`
+    when only k of its n runs have one; `EXCLUDED` runs are left out."""
+    reg, evt = _without_excluded(reg), _without_excluded(evt)
+    frames = {"regression": reg,
+              "event": evt[evt["granularity"] == EVENT_GRANULARITY]}
+    parts, notes = [], []
+    for title, which, metric, lower, groups in SUMMARY_TABLES:
+        frame = frames[which]
+        columns, short = [], set()
+        for track, channel in SUMMARY_TRACKS:
+            for pred_len in HORIZONS:
+                sub = frame[(frame["track"] == track) & (frame["channel"] == channel)
+                            & (frame["pred_len"] == pred_len)]
+                values = sub[["model", metric]].astype({metric: float}).groupby("model")[metric]
+                columns.append((values.mean(), values.count(), values.size()))
+                runs = _runs(sub)
+                grid = frozenset().union(*runs.values()) if runs else frozenset()
+                for model, model_runs in runs.items():
+                    if len(model_runs) < len(grid):
+                        short.add(model)
+                        note = _shortfall_note(model, model_runs, grid)
+                        if note not in notes:
+                            notes.append(note)
+        models = sorted(set().union(*(size.index for _, _, size in columns)),
+                        key=lambda m: DISP.get(m, m).lower())
+        best = [mean.min() if lower else mean.max() for mean, _, _ in columns]
+        rows = [(DISP.get(m, m) + (SHORT_MARK if m in short else ""),
+                 [_summary_cell(m, column, b) for column, b in zip(columns, best)])
+                for m in models]
+        parts.append(f"**{title}**\n\n{_html_table(groups, rows)}")
+    return "\n\n".join(parts + [f"_{SHORT_MARK} {note}._" for note in notes])
+
+
+def _summary_cell(model: str, column, best: float) -> str:
+    """`0.512`, `<b>0.512</b>` when it is the column's best, `0.512 (1/2)` when
+    only 1 of the model's 2 runs has a value, `NO_VALUE` when it has no run."""
+    mean, defined, rows = (s.get(model) for s in column)
+    if not rows:
+        return NO_VALUE
+    if not defined:
+        return f"{NO_VALUE} (0/{rows})"
+    text = f"{mean:.3f}"
+    if abs(mean - best) <= 1e-12:
+        text = f"<b>{text}</b>"
+    return text if defined == rows else f"{text} ({defined}/{rows})"
+
+
+def _html_table(groups: Tuple[str, ...], rows: List[Tuple[str, List[str]]]) -> str:
+    """An HTML table with a two-row header: `Model`, then each group spanning
+    the forecast lengths. Every cell is wrapped in <sub> for small text (GitHub
+    drops style attributes); `rows` holds a name and already formatted cells."""
+    def small(text: str) -> str:
+        return f"<sub>{text}</sub>"
+    top = [f'<th rowspan="2" align="left">{small("Model")}</th>']
+    top += [f'<th colspan="{len(HORIZONS)}">{small(escape(g))}</th>' for g in groups]
+    second = [f"<th>{small(h)}</th>" for _ in groups for h in HORIZONS.values()]
+    lines = ["<table>", "<thead>", "<tr>" + "".join(top) + "</tr>",
+             "<tr>" + "".join(second) + "</tr>", "</thead>", "<tbody>"]
+    for name, cells in rows:
+        lines.append(f"<tr><td>{small(escape(name))}</td>"
+                     + "".join(f'<td align="right">{small(c)}</td>' for c in cells)
+                     + "</tr>")
+    lines += ["</tbody>", "</table>"]
+    return "\n".join(lines)
 
 
 def _without_excluded(frame: pd.DataFrame) -> pd.DataFrame:

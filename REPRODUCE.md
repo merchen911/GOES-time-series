@@ -1,7 +1,8 @@
 # Reproducing the benchmark
 
 End-to-end steps to reproduce `results/results_regression.csv`,
-`results/results_event.csv` and the README leaderboard. Python 3.12 recommended
+`results/results_event.csv` and the leaderboard (README summary and
+`results/LEADERBOARD.md`). Python 3.12 recommended
 (netCDF / parquet libraries).
 
 ```bash
@@ -33,7 +34,7 @@ python main.py --data_path $SW_DATA_DIR/kswrc_particle_5m.parquet \
 # 4. (optional) re-score from the saved predictions — no GPU needed
 python3.12 scripts/rescore.py --runs runs/bench --master-dir runs/bench --workers 8
 
-# 5. regenerate the leaderboard from the two result tables
+# 5. regenerate the leaderboard (README summary + results/LEADERBOARD.md)
 cp runs/bench/results_regression.csv runs/bench/results_event.csv results/
 python3.12 scripts/make_leaderboard.py
 

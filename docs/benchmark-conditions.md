@@ -237,6 +237,7 @@ target channel with `rmse mae msa sspb logr`, sorted by `--sort_metric`, default
 aggregation unit with the counts and the eight event scores, best `hss` first
 within each channel and unit). Across cells and folds the benchmark driver
 collects every run into `results_regression.csv` and `results_event.csv`, and the
-README leaderboard averages them per forecast length (mean over folds and input
+leaderboard (README summary, full tables in `results/LEADERBOARD.md`) averages them
+per forecast length (mean over folds and input
 lengths, undefined runs left out and counted; a model with fewer runs than the
 grid, xPatch, is marked and footnoted).

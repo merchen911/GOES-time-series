@@ -4,11 +4,12 @@ import io
 import re
 import tempfile
 import unittest
+from html.parser import HTMLParser
 from pathlib import Path
 
 import pandas as pd
 
-from tslib.benchmark.leaderboard import leaderboard_markdown
+from tslib.benchmark.leaderboard import leaderboard_markdown, summary_html
 from tslib.exp.records import event_columns, regression_columns
 
 _REPO = Path(__file__).resolve().parents[2]
@@ -324,6 +325,148 @@ class TestRunCountsAgainstTheGrid(unittest.TestCase):
         self.assertEqual(_notes(text), [])
 
 
+
+class _Cells(HTMLParser):
+    """Rows of every <table> in an HTML fragment as [[(tag, attrs, text)]]."""
+    def __init__(self):
+        super().__init__()
+        self.tables, self._cell = [], None
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "table":
+            self.tables.append([])
+        elif tag == "tr":
+            self.tables[-1].append([])
+        elif tag in ("td", "th"):
+            self._cell = [tag, dict(attrs), "", False]
+        elif tag == "sub" and self._cell is not None:
+            self._cell[3] = True
+
+    def handle_endtag(self, tag):
+        if tag in ("td", "th") and self._cell is not None:
+            self.tables[-1][-1].append(tuple(self._cell))
+            self._cell = None
+
+    def handle_data(self, data):
+        if self._cell is not None:
+            self._cell[2] += data
+
+
+def _html_tables(html):
+    parser = _Cells()
+    parser.feed(html)
+    return parser.tables
+
+
+def _row(table, name):
+    """Cell texts of the body row whose first cell starts with `name`."""
+    (row,) = [r for r in table[2:] if r[0][2].startswith(name)]
+    return [c[2] for c in row[1:]]
+
+
+def _summary_runs(metric_rows, pred_lens=(36, 72, 144, 288)):
+    """One run per (track, model, pred_len) from {model: value-or-callable}."""
+    reg, evt = [], []
+    for track in ("uni_b", "uni_a"):
+        for model, value in metric_rows.items():
+            for p in pred_lens:
+                v = value(p) if callable(value) else value
+                reg.append(_reg_run(track=track, model=model, pred_len=p, rmse=v))
+                evt.append(_evt_run(track=track, model=model, pred_len=p, hss=v))
+    return _reg(*reg), _evt(*evt)
+
+
+class TestSummary(unittest.TestCase):
+    def test_two_tables_with_grouped_two_row_headers(self):
+        html = summary_html(*_summary_runs({"dlinear": 0.3}))
+        tables = _html_tables(html)
+        self.assertEqual(len(tables), 2)
+        for table in tables:
+            top, sub = table[0], table[1]
+            self.assertEqual(top[0][2], "Model")
+            self.assertEqual(top[0][1].get("rowspan"), "2")
+            self.assertEqual([c[1].get("colspan") for c in top[1:]], ["4", "4"])
+            self.assertTrue(top[1][2].startswith("SXR"))
+            self.assertTrue(top[2][2].startswith("Proton"))
+            self.assertEqual([c[2] for c in sub], ["3 h", "6 h", "12 h", "24 h"] * 2)
+
+    def test_every_cell_is_small_text(self):
+        for table in _html_tables(summary_html(*_summary_runs({"dlinear": 0.3}))):
+            for row in table:
+                self.assertTrue(all(c[3] for c in row), row)
+
+    def test_forecast_lengths_are_not_averaged_together(self):
+        values = {36: 0.1, 72: 0.2, 144: 0.3, 288: 0.4}
+        reg_table, evt_table = _html_tables(summary_html(*_summary_runs({"dlinear": values.get})))
+        self.assertEqual(_row(reg_table, "DLinear"), ["0.100", "0.200", "0.300", "0.400"] * 2)
+        self.assertEqual(_row(evt_table, "DLinear"), ["0.100", "0.200", "0.300", "0.400"] * 2)
+
+    def test_cell_is_the_mean_over_folds_and_input_lengths(self):
+        reg = _reg(_reg_run(rmse=0.2, fold=0, seq_len=288), _reg_run(rmse=0.4, fold=1, seq_len=864))
+        reg_table, _ = _html_tables(summary_html(reg, _evt()))
+        self.assertEqual(_row(reg_table, "DLinear")[0], "0.300")
+
+    def test_regression_is_rmse_and_classification_is_day_hss(self):
+        reg = _reg(_reg_run(rmse=0.25, msa=99.0))
+        evt = _evt(_evt_run(hss=0.6, tss=0.1),
+                   {**_evt_run(hss=0.9), "granularity": "point"})
+        reg_table, evt_table = _html_tables(summary_html(reg, evt))
+        self.assertEqual(_row(reg_table, "DLinear")[0], "0.250")
+        self.assertEqual(_row(evt_table, "DLinear")[0], "0.600")
+
+    def test_best_per_column_is_bold_low_rmse_high_hss(self):
+        reg, evt = _summary_runs({"dlinear": 0.2, "tide": 0.5})
+        html = summary_html(reg, evt)
+        reg_html, evt_html = html.split("</table>")[:2]
+        self.assertIn("<b>0.200</b>", reg_html)
+        self.assertNotIn("<b>0.500</b>", reg_html)
+        self.assertIn("<b>0.500</b>", evt_html)
+        self.assertNotIn("<b>0.200</b>", evt_html)
+
+    def test_best_is_chosen_per_column(self):
+        # dlinear wins every 3 h column, tide every other one
+        reg, evt = _summary_runs({"dlinear": lambda p: 0.1 if p == 36 else 0.9,
+                                  "tide": lambda p: 0.9 if p == 36 else 0.1})
+        reg_html = summary_html(reg, evt).split("</table>")[0]
+        rows = {r.split("</sub></td>", 1)[0].rsplit(">", 1)[-1]: r
+                for r in reg_html.splitlines() if r.startswith("<tr><td>")}
+        bold = lambda row: [("<b>" in c) for c in row.split("<td align=\"right\">")[1:]]
+        self.assertEqual(bold(rows["DLinear"]), [True, False, False, False] * 2)
+        self.assertEqual(bold(rows["TiDE"]), [False, True, True, True] * 2)
+
+    def test_rows_in_alphabetical_order_of_the_shown_names(self):
+        reg, evt = _summary_runs({"tide": 0.1, "dlinear": 0.9, "itransformer": 0.5})
+        reg_table, _ = _html_tables(summary_html(reg, evt))
+        self.assertEqual([r[0][2] for r in reg_table[2:]], ["DLinear", "iTransformer", "TiDE"])
+
+    def test_only_the_univariate_tracks(self):
+        reg = _reg(_reg_run(), _reg_run(track="multi", channel="xrs_long", model="tide"))
+        reg_table, _ = _html_tables(summary_html(reg, _evt()))
+        self.assertEqual([r[0][2] for r in reg_table[2:]], ["DLinear"])
+
+    def test_missing_horizon_is_a_dash(self):
+        reg_table, _ = _html_tables(summary_html(_reg(_reg_run(pred_len=36)), _evt()))
+        self.assertEqual(_row(reg_table, "DLinear")[:4], ["0.500", "–", "–", "–"])
+
+    def test_undefined_runs_are_counted_in_the_cell(self):
+        reg = _reg(_reg_run(rmse=0.2, fold=0), _reg_run(rmse=_NAN, fold=1))
+        reg_table, _ = _html_tables(summary_html(reg, _evt()))
+        self.assertEqual(_row(reg_table, "DLinear")[0], "0.200 (1/2)")
+
+    def test_short_model_is_marked_and_footnoted_and_2016_xpatch_left_out(self):
+        runs = [_reg_run(model=m, seq_len=s, fold=f,
+                         rmse=_NAN if (m, s) == ("xpatch", 2016) else 0.3)
+                for m in ("dlinear", "xpatch") for s in (288, 2016) for f in (0, 1)]
+        reg = _reg(*[r for r in runs if not (r["model"] == "xpatch" and r["seq_len"] == 2016
+                                             and r["fold"] == 1)])
+        html = summary_html(reg, _evt())
+        reg_table, _ = _html_tables(html)
+        self.assertEqual([r[0][2] for r in reg_table[2:]], ["DLinear", "xPatch†"])
+        self.assertIn("† xPatch is left out at the 7-day input", html)
+        self.assertNotIn("(2/3)", html)   # a leaked NaN 2016 run would show as 2 of 3
+        self.assertEqual(_row(reg_table, "xPatch")[0], "0.300")
+
+
 def _load_script():
     spec = importlib.util.spec_from_file_location(
         "make_leaderboard_script", _REPO / "scripts" / "make_leaderboard.py")
@@ -341,6 +484,7 @@ class TestScript(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         root = Path(self.tmp.name)
         self.reg, self.evt, self.readme = (root / "reg.csv", root / "evt.csv", root / "README.md")
+        self.full = root / "results" / "LEADERBOARD.md"
         _reg(_reg_run(rmse=0.25)).to_csv(self.reg, index=False)
         _evt(_evt_run(hss=0.5)).to_csv(self.evt, index=False)
         self.readme.write_text(self.README)
@@ -348,7 +492,7 @@ class TestScript(unittest.TestCase):
 
     def _main(self):
         argv = ["--regression", str(self.reg), "--event", str(self.evt),
-                "--readme", str(self.readme)]
+                "--readme", str(self.readme), "--full", str(self.full)]
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
             return self.module.main(argv)
 
@@ -359,19 +503,29 @@ class TestScript(unittest.TestCase):
         self.assertTrue(text.startswith(head))
         self.assertTrue(text.endswith(tail))
         self.assertNotIn("OLD TABLES", text)
-        self.assertIn("### 3 h (pred_len 36)", text)
-        self.assertIn("| DLinear | 0.250 |", text)   # CSV round trip keeps the values
+        self.assertIn("<table>", text)                       # the summary tables
+        self.assertIn("0.250", text)                         # CSV round trip keeps the values
+        self.assertNotIn("### 3 h (pred_len 36)", text)      # full tables live elsewhere
+        self.assertIn("results/LEADERBOARD.md", text)        # ... and the README says where
+
+    def test_writes_the_full_tables(self):
+        self.assertEqual(self._main(), 0)
+        full = self.full.read_text(encoding="utf-8")
+        self.assertIn("### 3 h (pred_len 36)", full)
+        self.assertIn("| DLinear | 0.250 |", full)
+        self.assertIn("input lengths", full)
 
     def test_rerun_is_idempotent(self):
         self._main()
-        once = self.readme.read_text()
+        once = (self.readme.read_text(), self.full.read_text())
         self._main()
-        self.assertEqual(self.readme.read_text(), once)
+        self.assertEqual((self.readme.read_text(), self.full.read_text()), once)
 
     def test_missing_markers_fail_without_touching_the_readme(self):
         self.readme.write_text("# no markers here\n")
         self.assertEqual(self._main(), 1)
         self.assertEqual(self.readme.read_text(), "# no markers here\n")
+        self.assertFalse(self.full.exists())
 
     def test_utf8_readme_under_an_ascii_locale(self):
         # REPRODUCE step 5 runs the script on README.md (em dashes, and the
@@ -385,12 +539,13 @@ class TestScript(unittest.TestCase):
         run = subprocess.run([sys.executable, "-X", "utf8=0",
                               str(_REPO / "scripts" / "make_leaderboard.py"),
                               "--regression", str(self.reg), "--event", str(self.evt),
-                              "--readme", str(self.readme)],
+                              "--readme", str(self.readme), "--full", str(self.full)],
                              capture_output=True, text=True, env=env, timeout=120)
         self.assertEqual(run.returncode, 0, run.stderr[-500:])
         text = self.readme.read_text(encoding="utf-8")
         self.assertTrue(text.startswith("# GOES \u2014 time series"))
-        self.assertIn("| DLinear | 0.250 |", text)
+        self.assertIn("0.250", text)
+        self.assertIn("\u2020", self.full.read_text(encoding="utf-8"))   # non-ASCII written
 
     def test_missing_table_file_fails(self):
         self.reg.unlink()

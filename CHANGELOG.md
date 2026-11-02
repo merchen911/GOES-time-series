@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- The README leaderboard is now a summary: one regression table (RMSE) and one
+  classification table (per-day HSS) for the univariate tracks, with a two-row
+  header that groups the 3 h, 6 h, 12 h and 24 h forecast lengths under each
+  channel. The full per-forecast-length tables (every metric, the multivariate
+  track) moved to `results/LEADERBOARD.md`. No number changed.
+
 ## 2.0.0 - 2026-10-30
 
 v2.0.0 reworks how forecasts are evaluated and recorded, and merges the v004

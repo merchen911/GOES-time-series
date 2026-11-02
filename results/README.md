@@ -46,8 +46,11 @@ that never forecast an event), not a zero.
 
 ## How the tables are used
 
-The README leaderboard is built from these two files by
-`scripts/make_leaderboard.py`: one table per forecast length and track, each cell
+`scripts/make_leaderboard.py` builds the leaderboard from these two files in
+two forms. The README shows a summary: one regression table (RMSE) and one
+classification table (per-day HSS) for the univariate tracks, with one column per
+channel and forecast length. [`LEADERBOARD.md`](LEADERBOARD.md) holds the full
+tables: one table per forecast length and track, each cell
 the mean of a model's runs with a defined value over the folds and input lengths
 of that forecast length, regression columns RMSE, MSA and logR per channel and
 per-day HSS and TSS. `k/n` marks a cell where only k of the n runs of the
